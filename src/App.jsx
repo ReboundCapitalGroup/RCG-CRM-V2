@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User } from 'lucide-react'
+import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown } from 'lucide-react'
 import { supabase } from './supabase'
 import SkipTraceModal from './SkipTraceModal'
 import ContactsSection from './ContactsSection'
@@ -18,6 +18,11 @@ export default function App() {
   const [showSkipTrace, setShowSkipTrace] = useState(false)
   const [leadContacts, setLeadContacts] = useState([])
   const [selectedTarget, setSelectedTarget] = useState(null)
+  const [selectedLeads, setSelectedLeads] = useState([])
+  const [sortBy, setSortBy] = useState('date')
+  const [sortOrder, setSortOrder] = useState('desc')
+  const [editingNote, setEditingNote] = useState(null)
+  const [editNoteText, setEditNoteText] = useState('')
 
   useEffect(() => {
     if (user) loadData()
@@ -225,17 +230,15 @@ export default function App() {
   const assign = async (id, userId) => {
     await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
     setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
+    if (selectedLead?.id === id) {
+      setSelectedLead({ ...selectedLead, assigned_to: userId })
+    }
   }
 
   const deleteLead = async (id, caseName) => {
-    if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE lead ${caseName}? This cannot be undone!`)) {
-      return
-    }
-    
     try {
       await supabase.from('leads').delete().eq('id', id)
       setLeads(leads.filter(l => l.id !== id))
-      alert('Lead deleted successfully')
     } catch (err) {
       console.error(err)
       alert('Failed to delete lead')
@@ -254,6 +257,15 @@ export default function App() {
     setNote('')
     const notes = await loadNotes(selectedLead.id)
     setSelectedLead({ ...selectedLead, notes })
+  }
+
+  const updateNote = async (noteId, newText) => {
+    if (!newText.trim()) return
+    await supabase.from('notes').update({ text: newText }).eq('id', noteId)
+    const notes = await loadNotes(selectedLead.id)
+    setSelectedLead({ ...selectedLead, notes })
+    setEditingNote(null)
+    setEditNoteText('')
   }
 
   const uploadLeads = async () => {
@@ -324,6 +336,20 @@ export default function App() {
     return true
   })
 
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    if (sortBy === 'date') {
+      const dateA = a.auction_date ? new Date(a.auction_date) : new Date(0)
+      const dateB = b.auction_date ? new Date(b.auction_date) : new Date(0)
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB
+    }
+    if (sortBy === 'surplus') {
+      const surpA = parseFloat((a.surplus || '0').replace(/[$,]/g, ''))
+      const surpB = parseFloat((b.surplus || '0').replace(/[$,]/g, ''))
+      return sortOrder === 'desc' ? surpB - surpA : surpA - surpB
+    }
+    return 0
+  })
+
   const stats = {
     total: leads.length,
     new: leads.filter(l => l.status === 'New').length,
@@ -343,8 +369,19 @@ export default function App() {
   const counties = [...new Set(leads.map(l => l.county))].filter(Boolean).sort()
   const states = [...new Set(leads.map(l => {
     const county = l.county || ''
-    const match = county.match(/^([A-Z]{2})/)
-    return match ? match[1] : null
+    if (county.includes('-')) {
+      const parts = county.split('-')
+      const state = parts[0].trim()
+      if (state.length === 2) return state.toUpperCase()
+      const stateMap = {
+        'Florida': 'FL', 'Ohio': 'OH', 'Texas': 'TX', 'Colorado': 'CO',
+        'Pennsylvania': 'PA', 'Arizona': 'AZ', 'New Jersey': 'NJ',
+        'New York': 'NY', 'California': 'CA', 'Idaho': 'ID',
+        'Louisiana': 'LA', 'Washington': 'WA'
+      }
+      return stateMap[state] || state
+    }
+    return null
   }))].filter(Boolean).sort()
 
   if (loading) return (
@@ -569,9 +606,48 @@ export default function App() {
                   <div key={n.id} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
                     <div className="flex items-start justify-between mb-2">
                       <span className="text-slate-400 text-xs font-medium">{n.author}</span>
-                      <span className="text-slate-500 text-xs">{new Date(n.created_at).toLocaleDateString()}</span>
+                      <div className="flex gap-2">
+                        <span className="text-slate-500 text-xs">{new Date(n.created_at).toLocaleDateString()}</span>
+                        <button 
+                          onClick={() => {
+                            setEditingNote(n.id)
+                            setEditNoteText(n.text)
+                          }}
+                          className="text-amber-400 text-xs hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-white text-sm">{n.text}</p>
+                    {editingNote === n.id ? (
+                      <div className="space-y-2">
+                        <textarea 
+                          value={editNoteText}
+                          onChange={e => setEditNoteText(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
+                          rows={2}
+                        />
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => updateNote(n.id, editNoteText)}
+                            className="px-3 py-1 bg-amber-500 text-white rounded text-xs"
+                          >
+                            Save
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setEditingNote(null)
+                              setEditNoteText('')
+                            }}
+                            className="px-3 py-1 bg-slate-600 text-white rounded text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-white text-sm">{n.text}</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -596,7 +672,9 @@ export default function App() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" 
+         style={{userSelect: 'none', WebkitUserSelect: 'none'}}
+         onContextMenu={(e) => e.preventDefault()}>
       <div className="bg-slate-800/50 border-b border-slate-700/50 sticky top-0 z-50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
@@ -687,6 +765,36 @@ export default function App() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-slate-400 text-sm">Sort by:</span>
+          <button 
+            onClick={() => {
+              if (sortBy === 'date') {
+                setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+              } else {
+                setSortBy('date')
+                setSortOrder('desc')
+              }
+            }}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${sortBy === 'date' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
+          >
+            Date {sortBy === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
+          </button>
+          <button 
+            onClick={() => {
+              if (sortBy === 'surplus') {
+                setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+              } else {
+                setSortBy('surplus')
+                setSortOrder('desc')
+              }
+            }}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${sortBy === 'surplus' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
+          >
+            Surplus {sortBy === 'surplus' && (sortOrder === 'desc' ? '↓' : '↑')}
+          </button>
+        </div>
+
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="relative">
@@ -713,10 +821,70 @@ export default function App() {
           </div>
         </div>
 
+        {selectedLeads.length > 0 && (
+          <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4 mb-4 flex items-center justify-between">
+            <span className="text-white font-medium">{selectedLeads.length} leads selected</span>
+            <div className="flex gap-2">
+              {user?.role === 'admin' && (
+                <>
+                  <select 
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        selectedLeads.forEach(id => assign(id, e.target.value))
+                        setSelectedLeads([])
+                      }
+                    }}
+                    className="px-4 py-2 bg-slate-800 border border-slate-600 text-white rounded-lg"
+                  >
+                    <option value="">Assign to...</option>
+                    {users.filter(u => u.role === 'user').map(u => 
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    )}
+                  </select>
+                  <button 
+                    onClick={() => {
+                      if (window.confirm(`Delete ${selectedLeads.length} leads?`)) {
+                        selectedLeads.forEach(id => {
+                          const lead = leads.find(l => l.id === id)
+                          deleteLead(id, lead?.case_number)
+                        })
+                        setSelectedLeads([])
+                      }
+                    }}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+                  >
+                    Delete Selected
+                  </button>
+                </>
+              )}
+              <button 
+                onClick={() => setSelectedLeads([])}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="bg-slate-900/50 border-b border-slate-700/50">
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '40px'}}>
+                  <input 
+                    type="checkbox"
+                    checked={sortedFiltered.length > 0 && selectedLeads.length === sortedFiltered.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedLeads(sortedFiltered.map(l => l.id))
+                      } else {
+                        setSelectedLeads([])
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700"
+                  />
+                </th>
                 <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '110px'}}>Case #</th>
                 <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '90px'}}>County</th>
                 <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300">Property</th>
@@ -728,8 +896,22 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((l, i) => (
+              {sortedFiltered.map((l, i) => (
                 <tr key={l.id} className={`border-b border-slate-700/30 hover:bg-slate-700/30 ${i % 2 === 0 ? 'bg-slate-900/20' : ''}`}>
+                  <td className="px-2 py-2" style={{width: '40px'}}>
+                    <input 
+                      type="checkbox"
+                      checked={selectedLeads.includes(l.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedLeads([...selectedLeads, l.id])
+                        } else {
+                          setSelectedLeads(selectedLeads.filter(id => id !== l.id))
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-700"
+                    />
+                  </td>
                   <td className="px-2 py-2 text-white font-mono text-xs truncate" style={{width: '110px'}}>{l.case_number}</td>
                   <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
                   <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
@@ -755,7 +937,11 @@ export default function App() {
                         <Eye className="w-3 h-3" /> View
                       </button>
                       {user?.role === 'admin' && (
-                        <button onClick={() => deleteLead(l.id, l.case_number)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
+                        <button onClick={() => {
+                          if (window.confirm(`Delete ${l.case_number}?`)) {
+                            deleteLead(l.id, l.case_number)
+                          }
+                        }} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
                           Del
                         </button>
                       )}
@@ -765,7 +951,7 @@ export default function App() {
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && <div className="text-center py-12 text-slate-400">No leads found</div>}
+          {sortedFiltered.length === 0 && <div className="text-center py-12 text-slate-400">No leads found</div>}
         </div>
       </div>
     </div>
