@@ -341,14 +341,19 @@ export default function App() {
   }
 
   const counties = [...new Set(leads.map(l => l.county))].filter(Boolean).sort()
-  const states = [...new Set(leads.map(l => l.county?.split('-')[0]))].filter(Boolean).sort()
+  const states = [...new Set(leads.map(l => {
+    const county = l.county || ''
+    const match = county.match(/^([A-Z]{2})/)
+    return match ? match[1] : null
+  }))].filter(Boolean).sort()
 
   if (loading) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center">
       <div className="text-amber-400 text-xl">Loading...</div>
     </div>
   )
-if (view === 'login') return (
+
+  if (view === 'login') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-2xl p-8">
         <div className="text-center mb-8">
@@ -364,7 +369,8 @@ if (view === 'login') return (
       </div>
     </div>
   )
-if (view === 'admin') return (
+
+  if (view === 'admin') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -404,7 +410,8 @@ if (view === 'admin') return (
       </div>
     </div>
   )
-if (view === 'detail' && selectedLead) return (
+
+  if (view === 'detail' && selectedLead) return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -530,7 +537,8 @@ if (view === 'detail' && selectedLead) return (
               </div>
             </div>
           </div>
-<div className="space-y-6">
+
+          <div className="space-y-6">
             {user?.role === 'admin' && (
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Assign</h3>
@@ -704,48 +712,51 @@ if (view === 'detail' && selectedLead) return (
             </select>
           </div>
         </div>
-<div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-          <table className="w-full">
+
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+          <table className="w-full table-fixed">
             <thead>
               <tr className="bg-slate-900/50 border-b border-slate-700/50">
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Case #</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">County</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Property</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Type</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Date</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Surplus</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Status</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-300">Action</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-28">Case #</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-24">County</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300">Property</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-20">Type</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-20">Date</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-24">Surplus</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-20">Status</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-32">Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((l, i) => (
                 <tr key={l.id} className={`border-b border-slate-700/30 hover:bg-slate-700/30 ${i % 2 === 0 ? 'bg-slate-900/20' : ''}`}>
-                  <td className="px-6 py-4 text-white font-mono text-sm">{l.case_number}</td>
-                  <td className="px-6 py-4 text-slate-300 text-sm">{l.county}</td>
-                  <td className="px-6 py-4 text-white text-sm max-w-xs truncate">{l.property_address}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>{l.lead_type}</span>
+                  <td className="px-3 py-3 text-white font-mono text-xs truncate">{l.case_number}</td>
+                  <td className="px-3 py-3 text-slate-300 text-xs">{l.county?.split('-')[1] || l.county}</td>
+                  <td className="px-3 py-3 text-white text-xs truncate">{l.property_address}</td>
+                  <td className="px-3 py-3">
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                      {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-300 text-sm">{l.auction_date || '—'}</td>
-                  <td className="px-6 py-4 text-emerald-400 font-semibold text-sm">{l.surplus || '—'}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                  <td className="px-3 py-3 text-slate-300 text-xs whitespace-nowrap">{l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}</td>
+                  <td className="px-3 py-3 text-emerald-400 font-semibold text-xs whitespace-nowrap">{l.surplus || '—'}</td>
+                  <td className="px-3 py-3">
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
                       l.status === 'New' ? 'bg-blue-500/20 text-blue-400' :
                       l.status === 'Contacted' ? 'bg-amber-500/20 text-amber-400' :
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
                       l.status === 'Not Interested' ? 'bg-slate-500/20 text-slate-400' :
                       'bg-red-500/20 text-red-400'
-                    }`}>{l.status}</span>
+                    }`}>{l.status === 'Not Interested' ? 'NoInt' : l.status}</span>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => viewLead(l)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">
-                        <Eye className="w-4 h-4" /> View
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => viewLead(l)} className="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs whitespace-nowrap">
+                        <Eye className="w-3 h-3" /> View
                       </button>
                       {user?.role === 'admin' && (
-                        <button onClick={() => deleteLead(l.id, l.case_number)} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm">
-                          Delete
+                        <button onClick={() => deleteLead(l.id, l.case_number)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs whitespace-nowrap">
+                          Del
                         </button>
                       )}
                     </div>
