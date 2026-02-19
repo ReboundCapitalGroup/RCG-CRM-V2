@@ -5,7 +5,6 @@ import SkipTraceModal from './SkipTraceModal'
 import ContactsSection from './ContactsSection'
 
 export default function App() {
-  // State
   const [user, setUser] = useState(null)
   const [leads, setLeads] = useState([])
   const [users, setUsers] = useState([])
@@ -20,7 +19,6 @@ export default function App() {
   const [leadContacts, setLeadContacts] = useState([])
   const [selectedTarget, setSelectedTarget] = useState(null)
 
-  // Load data
   useEffect(() => {
     if (user) loadData()
   }, [user])
@@ -61,7 +59,8 @@ export default function App() {
     
     return contacts || []
   }
-const saveSkipTrace = async (data) => {
+
+  const saveSkipTrace = async (data) => {
     const { contact, relatives } = data
     
     try {
@@ -216,7 +215,8 @@ const saveSkipTrace = async (data) => {
     setView('login')
     setSelectedLead(null)
   }
-const updateStatus = async (id, status) => {
+
+  const updateStatus = async (id, status) => {
     await supabase.from('leads').update({ status, last_modified: new Date().toISOString() }).eq('id', id)
     setLeads(leads.map(l => l.id === id ? { ...l, status } : l))
     if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, status })
@@ -308,155 +308,21 @@ const updateStatus = async (id, status) => {
     setView('detail')
   }
 
-  const filtered = leads
-    .filter(l => {
-      if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
-      if (filters.status !== 'all' && l.status !== filters.status) return false
-      if (filters.type !== 'all' && l.lead_type !== filters.type) return false
-      if (filters.county !== 'all' && l.county !== filters.county) return false
-      if (filters.state !== 'all' && l.county?.split('-')[0] !== filters.state) return false
-      if (search) {
-        const s = search.toLowerCase()
-        return (l.case_number?.toLowerCase().includes(s)) ||
-               (l.property_address?.toLowerCase().includes(s)) ||
-               (l.county?.toLowerCase().includes(s)) ||
-               (l.defendants?.toLowerCase().includes(s))
-      }
-      return true
-    })
-
-  const stats = {
-    total: leads.length,
-    new: leads.filter(l => l.status === 'New').length,
-    contacted: leads.filter(l => l.status === 'Contacted').length,
-    interested: leads.filter(l => l.status === 'Interested').length,
-    surplus: leads.filter(l => l.lead_type === 'Surplus').length,
-    future: leads.filter(l => l.lead_type === 'Future Auction').length,
-    totalSurplus: leads.reduce((sum, l) => {
-      if (l.surplus && l.status !== 'Dead') {
-        const amount = parseFloat(l.surplus.replace(/[$,]/g, ''))
-        return sum + (amount > 0 ? amount : 0)
-      }
-      return sum
-    }, 0)
-  }
-
-  const counties = [...new Set(leads.map(l => l.county))].filter(Boolean).sort()
-  const states = [...new Set(leads.map(l => l.county?.split('-')[0]))].filter(Boolean).sort()
-
-  if (loading) return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-      <div className="text-amber-400 text-xl">Loading...</div>
-    </div>
-  )
-const updateStatus = async (id, status) => {
-    await supabase.from('leads').update({ status, last_modified: new Date().toISOString() }).eq('id', id)
-    setLeads(leads.map(l => l.id === id ? { ...l, status } : l))
-    if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, status })
-  }
-
-  const assign = async (id, userId) => {
-    await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
-    setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
-  }
-
-  const deleteLead = async (id, caseName) => {
-    if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE lead ${caseName}? This cannot be undone!`)) {
-      return
+  const filtered = leads.filter(l => {
+    if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
+    if (filters.status !== 'all' && l.status !== filters.status) return false
+    if (filters.type !== 'all' && l.lead_type !== filters.type) return false
+    if (filters.county !== 'all' && l.county !== filters.county) return false
+    if (filters.state !== 'all' && l.county?.split('-')[0] !== filters.state) return false
+    if (search) {
+      const s = search.toLowerCase()
+      return (l.case_number?.toLowerCase().includes(s)) ||
+             (l.property_address?.toLowerCase().includes(s)) ||
+             (l.county?.toLowerCase().includes(s)) ||
+             (l.defendants?.toLowerCase().includes(s))
     }
-    
-    try {
-      await supabase.from('leads').delete().eq('id', id)
-      setLeads(leads.filter(l => l.id !== id))
-      alert('Lead deleted successfully')
-    } catch (err) {
-      console.error(err)
-      alert('Failed to delete lead')
-    }
-  }
-
-  const addNote = async () => {
-    if (!note.trim() || !selectedLead) return
-    const newNote = {
-      lead_id: selectedLead.id,
-      text: note,
-      author: user.name,
-      created_at: new Date().toISOString()
-    }
-    await supabase.from('notes').insert([newNote])
-    setNote('')
-    const notes = await loadNotes(selectedLead.id)
-    setSelectedLead({ ...selectedLead, notes })
-  }
-
-  const uploadLeads = async () => {
-    if (!uploadText.trim()) return alert('Paste JSON data')
-    try {
-      const data = JSON.parse(uploadText)
-      const formatted = data.map(l => ({
-        id: l.id,
-        case_number: l.caseNumber,
-        county: l.county,
-        lead_type: l.leadType,
-        auction_date: l.auctionDate,
-        property_address: l.propertyAddress,
-        property_city: l.propertyCity,
-        property_zip: l.propertyZip,
-        assessed_value: l.assessedValue,
-        judgment_amount: l.judgmentAmount,
-        sold_amount: l.soldAmount,
-        surplus: l.surplus,
-        defendants: l.defendants,
-        plaintiffs: l.plaintiffs,
-        parcel_id: l.parcelId,
-        case_url: l.caseUrl,
-        zillow_url: l.zillowUrl,
-        property_appraiser_url: l.propertyAppraiserUrl,
-        status: l.status || 'New'
-      }))
-      await supabase.from('leads').upsert(formatted)
-      loadData()
-      setUploadText('')
-      alert(`Uploaded ${data.length} leads!`)
-    } catch {
-      alert('Invalid JSON')
-    }
-  }
-
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `leads_${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-  }
-
-  const viewLead = async (lead) => {
-    const [notes, contacts] = await Promise.all([
-      loadNotes(lead.id),
-      loadContacts(lead.id)
-    ])
-    setSelectedLead({ ...lead, notes })
-    setLeadContacts(contacts)
-    setView('detail')
-  }
-
-  const filtered = leads
-    .filter(l => {
-      if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
-      if (filters.status !== 'all' && l.status !== filters.status) return false
-      if (filters.type !== 'all' && l.lead_type !== filters.type) return false
-      if (filters.county !== 'all' && l.county !== filters.county) return false
-      if (filters.state !== 'all' && l.county?.split('-')[0] !== filters.state) return false
-      if (search) {
-        const s = search.toLowerCase()
-        return (l.case_number?.toLowerCase().includes(s)) ||
-               (l.property_address?.toLowerCase().includes(s)) ||
-               (l.county?.toLowerCase().includes(s)) ||
-               (l.defendants?.toLowerCase().includes(s))
-      }
-      return true
-    })
+    return true
+  })
 
   const stats = {
     total: leads.length,
@@ -498,8 +364,7 @@ if (view === 'login') return (
       </div>
     </div>
   )
-
-  if (view === 'admin') return (
+if (view === 'admin') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -665,8 +530,7 @@ if (view === 'detail' && selectedLead) return (
               </div>
             </div>
           </div>
-
-          <div className="space-y-6">
+<div className="space-y-6">
             {user?.role === 'admin' && (
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Assign</h3>
@@ -722,7 +586,8 @@ if (view === 'detail' && selectedLead) return (
       )}
     </div>
   )
-return (
+
+  return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 sticky top-0 z-50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -839,8 +704,7 @@ return (
             </select>
           </div>
         </div>
-
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+<div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="bg-slate-900/50 border-b border-slate-700/50">
