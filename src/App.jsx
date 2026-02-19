@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown } from 'lucide-react'
+import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2 } from 'lucide-react'
 import { supabase } from './supabase'
 import SkipTraceModal from './SkipTraceModal'
 import ContactsSection from './ContactsSection'
@@ -26,6 +26,39 @@ export default function App() {
 
   useEffect(() => {
     if (user) loadData()
+  }, [user])
+
+  useEffect(() => {
+    if (user?.role !== 'admin') {
+      const style = document.createElement('style')
+      style.innerHTML = `
+        * {
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          -ms-user-select: none !important;
+          user-select: none !important;
+        }
+        input, textarea {
+          -webkit-user-select: text !important;
+          -moz-user-select: text !important;
+          -ms-user-select: text !important;
+          user-select: text !important;
+        }
+      `
+      document.head.appendChild(style)
+      
+      document.addEventListener('contextmenu', (e) => e.preventDefault())
+      document.addEventListener('copy', (e) => e.preventDefault())
+      document.addEventListener('cut', (e) => e.preventDefault())
+      
+      const originalLog = console.log
+      console.log = () => {}
+      
+      return () => {
+        document.head.removeChild(style)
+        console.log = originalLog
+      }
+    }
   }, [user])
 
   const loadData = async () => {
@@ -268,6 +301,13 @@ export default function App() {
     setEditNoteText('')
   }
 
+  const deleteNote = async (noteId) => {
+    if (!window.confirm('Delete this note?')) return
+    await supabase.from('notes').delete().eq('id', noteId)
+    const notes = await loadNotes(selectedLead.id)
+    setSelectedLead({ ...selectedLead, notes })
+  }
+
   const uploadLeads = async () => {
     if (!uploadText.trim()) return alert('Paste JSON data')
     try {
@@ -325,7 +365,15 @@ export default function App() {
     if (filters.status !== 'all' && l.status !== filters.status) return false
     if (filters.type !== 'all' && l.lead_type !== filters.type) return false
     if (filters.county !== 'all' && l.county !== filters.county) return false
-    if (filters.state !== 'all' && l.county?.split('-')[0] !== filters.state) return false
+    if (filters.state !== 'all') {
+      const county = l.county || ''
+      if (county.includes('-')) {
+        const stateCode = county.split('-')[0].trim()
+        if (stateCode !== filters.state) return false
+      } else {
+        return false
+      }
+    }
     if (search) {
       const s = search.toLowerCase()
       return (l.case_number?.toLowerCase().includes(s)) ||
@@ -370,16 +418,8 @@ export default function App() {
   const states = [...new Set(leads.map(l => {
     const county = l.county || ''
     if (county.includes('-')) {
-      const parts = county.split('-')
-      const state = parts[0].trim()
-      if (state.length === 2) return state.toUpperCase()
-      const stateMap = {
-        'Florida': 'FL', 'Ohio': 'OH', 'Texas': 'TX', 'Colorado': 'CO',
-        'Pennsylvania': 'PA', 'Arizona': 'AZ', 'New Jersey': 'NJ',
-        'New York': 'NY', 'California': 'CA', 'Idaho': 'ID',
-        'Louisiana': 'LA', 'Washington': 'WA'
-      }
-      return stateMap[state] || state
+      const stateCode = county.split('-')[0].trim()
+      if (stateCode.length === 2) return stateCode.toUpperCase()
     }
     return null
   }))].filter(Boolean).sort()
@@ -617,6 +657,12 @@ export default function App() {
                         >
                           Edit
                         </button>
+                        <button 
+                          onClick={() => deleteNote(n.id)}
+                          className="text-red-400 text-xs hover:underline"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                     {editingNote === n.id ? (
@@ -672,9 +718,7 @@ export default function App() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" 
-         style={{userSelect: 'none', WebkitUserSelect: 'none'}}
-         onContextMenu={(e) => e.preventDefault()}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 sticky top-0 z-50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
