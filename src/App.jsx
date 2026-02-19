@@ -12,13 +12,13 @@ export default function App() {
   const [view, setView] = useState('login')
   const [selectedLead, setSelectedLead] = useState(null)
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ status: 'all', type: 'all', county: 'all' })
+  const [filters, setFilters] = useState({ status: 'all', type: 'all', county: 'all', state: 'all' })
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadText, setUploadText] = useState('')
   const [showSkipTrace, setShowSkipTrace] = useState(false)
   const [leadContacts, setLeadContacts] = useState([])
-const [selectedTarget, setSelectedTarget] = useState(null)
+  const [selectedTarget, setSelectedTarget] = useState(null)
 
   // Load data
   useEffect(() => {
@@ -61,12 +61,10 @@ const [selectedTarget, setSelectedTarget] = useState(null)
     
     return contacts || []
   }
-
-  const saveSkipTrace = async (data) => {
+const saveSkipTrace = async (data) => {
     const { contact, relatives } = data
     
     try {
-      // Insert main contact
       const contactData = {
         lead_id: selectedLead.id,
         full_name: contact.full_name,
@@ -90,7 +88,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
         .single()
       
       if (insertedContact) {
-        // Insert phones
         const phones = contact.phones
           .filter(p => p.number.trim())
           .map((p, i) => ({
@@ -105,7 +102,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
           await supabase.from('phone_numbers').insert(phones)
         }
         
-        // Insert emails
         const emails = contact.emails
           .filter(e => e.email.trim())
           .map((e, i) => ({
@@ -120,7 +116,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
           await supabase.from('emails').insert(emails)
         }
         
-        // Insert address if provided
         if (contact.address) {
           await supabase.from('addresses').insert([{
             contact_id: insertedContact.id,
@@ -133,7 +128,7 @@ const [selectedTarget, setSelectedTarget] = useState(null)
             data_source: 'manual'
           }])
         }
-// Insert relatives
+        
         for (const relative of relatives) {
           if (!relative.name.trim()) continue
           
@@ -155,7 +150,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
             .single()
           
           if (relContact) {
-            // Link relative to main contact
             await supabase.from('relatives').insert([{
               contact_id: insertedContact.id,
               relative_contact_id: relContact.id,
@@ -163,7 +157,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
               data_source: 'manual'
             }])
             
-            // Add relative phones
             const relPhones = relative.phones
               .filter(p => p.number.trim())
               .map(p => ({
@@ -179,7 +172,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
           }
         }
         
-        // Update lead status
         await supabase
           .from('leads')
           .update({
@@ -189,7 +181,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
           })
           .eq('id', selectedLead.id)
         
-        // Reload contacts
         const updatedContacts = await loadContacts(selectedLead.id)
         setLeadContacts(updatedContacts)
         setShowSkipTrace(false)
@@ -202,7 +193,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
     }
   }
 
-  // Auth
   const login = async (e) => {
     e.preventDefault()
     const form = new FormData(e.target)
@@ -226,9 +216,7 @@ const [selectedTarget, setSelectedTarget] = useState(null)
     setView('login')
     setSelectedLead(null)
   }
-
-  // Lead operations
-  const updateStatus = async (id, status) => {
+const updateStatus = async (id, status) => {
     await supabase.from('leads').update({ status, last_modified: new Date().toISOString() }).eq('id', id)
     setLeads(leads.map(l => l.id === id ? { ...l, status } : l))
     if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, status })
@@ -237,6 +225,21 @@ const [selectedTarget, setSelectedTarget] = useState(null)
   const assign = async (id, userId) => {
     await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
     setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
+  }
+
+  const deleteLead = async (id, caseName) => {
+    if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE lead ${caseName}? This cannot be undone!`)) {
+      return
+    }
+    
+    try {
+      await supabase.from('leads').delete().eq('id', id)
+      setLeads(leads.filter(l => l.id !== id))
+      alert('Lead deleted successfully')
+    } catch (err) {
+      console.error(err)
+      alert('Failed to delete lead')
+    }
   }
 
   const addNote = async () => {
@@ -305,13 +308,13 @@ const [selectedTarget, setSelectedTarget] = useState(null)
     setView('detail')
   }
 
-  // Filtering
   const filtered = leads
     .filter(l => {
       if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
       if (filters.status !== 'all' && l.status !== filters.status) return false
       if (filters.type !== 'all' && l.lead_type !== filters.type) return false
       if (filters.county !== 'all' && l.county !== filters.county) return false
+      if (filters.state !== 'all' && l.county?.split('-')[0] !== filters.state) return false
       if (search) {
         const s = search.toLowerCase()
         return (l.case_number?.toLowerCase().includes(s)) ||
@@ -328,18 +331,158 @@ const [selectedTarget, setSelectedTarget] = useState(null)
     contacted: leads.filter(l => l.status === 'Contacted').length,
     interested: leads.filter(l => l.status === 'Interested').length,
     surplus: leads.filter(l => l.lead_type === 'Surplus').length,
-    future: leads.filter(l => l.lead_type === 'Future Auction').length
+    future: leads.filter(l => l.lead_type === 'Future Auction').length,
+    totalSurplus: leads.reduce((sum, l) => {
+      if (l.surplus && l.status !== 'Dead') {
+        const amount = parseFloat(l.surplus.replace(/[$,]/g, ''))
+        return sum + (amount > 0 ? amount : 0)
+      }
+      return sum
+    }, 0)
   }
 
   const counties = [...new Set(leads.map(l => l.county))].filter(Boolean).sort()
+  const states = [...new Set(leads.map(l => l.county?.split('-')[0]))].filter(Boolean).sort()
 
   if (loading) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center">
       <div className="text-amber-400 text-xl">Loading...</div>
     </div>
   )
-// LOGIN
-  if (view === 'login') return (
+const updateStatus = async (id, status) => {
+    await supabase.from('leads').update({ status, last_modified: new Date().toISOString() }).eq('id', id)
+    setLeads(leads.map(l => l.id === id ? { ...l, status } : l))
+    if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, status })
+  }
+
+  const assign = async (id, userId) => {
+    await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
+    setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
+  }
+
+  const deleteLead = async (id, caseName) => {
+    if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE lead ${caseName}? This cannot be undone!`)) {
+      return
+    }
+    
+    try {
+      await supabase.from('leads').delete().eq('id', id)
+      setLeads(leads.filter(l => l.id !== id))
+      alert('Lead deleted successfully')
+    } catch (err) {
+      console.error(err)
+      alert('Failed to delete lead')
+    }
+  }
+
+  const addNote = async () => {
+    if (!note.trim() || !selectedLead) return
+    const newNote = {
+      lead_id: selectedLead.id,
+      text: note,
+      author: user.name,
+      created_at: new Date().toISOString()
+    }
+    await supabase.from('notes').insert([newNote])
+    setNote('')
+    const notes = await loadNotes(selectedLead.id)
+    setSelectedLead({ ...selectedLead, notes })
+  }
+
+  const uploadLeads = async () => {
+    if (!uploadText.trim()) return alert('Paste JSON data')
+    try {
+      const data = JSON.parse(uploadText)
+      const formatted = data.map(l => ({
+        id: l.id,
+        case_number: l.caseNumber,
+        county: l.county,
+        lead_type: l.leadType,
+        auction_date: l.auctionDate,
+        property_address: l.propertyAddress,
+        property_city: l.propertyCity,
+        property_zip: l.propertyZip,
+        assessed_value: l.assessedValue,
+        judgment_amount: l.judgmentAmount,
+        sold_amount: l.soldAmount,
+        surplus: l.surplus,
+        defendants: l.defendants,
+        plaintiffs: l.plaintiffs,
+        parcel_id: l.parcelId,
+        case_url: l.caseUrl,
+        zillow_url: l.zillowUrl,
+        property_appraiser_url: l.propertyAppraiserUrl,
+        status: l.status || 'New'
+      }))
+      await supabase.from('leads').upsert(formatted)
+      loadData()
+      setUploadText('')
+      alert(`Uploaded ${data.length} leads!`)
+    } catch {
+      alert('Invalid JSON')
+    }
+  }
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `leads_${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+  }
+
+  const viewLead = async (lead) => {
+    const [notes, contacts] = await Promise.all([
+      loadNotes(lead.id),
+      loadContacts(lead.id)
+    ])
+    setSelectedLead({ ...lead, notes })
+    setLeadContacts(contacts)
+    setView('detail')
+  }
+
+  const filtered = leads
+    .filter(l => {
+      if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
+      if (filters.status !== 'all' && l.status !== filters.status) return false
+      if (filters.type !== 'all' && l.lead_type !== filters.type) return false
+      if (filters.county !== 'all' && l.county !== filters.county) return false
+      if (filters.state !== 'all' && l.county?.split('-')[0] !== filters.state) return false
+      if (search) {
+        const s = search.toLowerCase()
+        return (l.case_number?.toLowerCase().includes(s)) ||
+               (l.property_address?.toLowerCase().includes(s)) ||
+               (l.county?.toLowerCase().includes(s)) ||
+               (l.defendants?.toLowerCase().includes(s))
+      }
+      return true
+    })
+
+  const stats = {
+    total: leads.length,
+    new: leads.filter(l => l.status === 'New').length,
+    contacted: leads.filter(l => l.status === 'Contacted').length,
+    interested: leads.filter(l => l.status === 'Interested').length,
+    surplus: leads.filter(l => l.lead_type === 'Surplus').length,
+    future: leads.filter(l => l.lead_type === 'Future Auction').length,
+    totalSurplus: leads.reduce((sum, l) => {
+      if (l.surplus && l.status !== 'Dead') {
+        const amount = parseFloat(l.surplus.replace(/[$,]/g, ''))
+        return sum + (amount > 0 ? amount : 0)
+      }
+      return sum
+    }, 0)
+  }
+
+  const counties = [...new Set(leads.map(l => l.county))].filter(Boolean).sort()
+  const states = [...new Set(leads.map(l => l.county?.split('-')[0]))].filter(Boolean).sort()
+
+  if (loading) return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="text-amber-400 text-xl">Loading...</div>
+    </div>
+  )
+if (view === 'login') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-2xl p-8">
         <div className="text-center mb-8">
@@ -356,7 +499,6 @@ const [selectedTarget, setSelectedTarget] = useState(null)
     </div>
   )
 
-  // ADMIN PANEL
   if (view === 'admin') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
@@ -397,9 +539,7 @@ const [selectedTarget, setSelectedTarget] = useState(null)
       </div>
     </div>
   )
-
-  // LEAD DETAIL
-  if (view === 'detail' && selectedLead) return (
+if (view === 'detail' && selectedLead) return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -434,112 +574,98 @@ const [selectedTarget, setSelectedTarget] = useState(null)
                 </div>
               )}
             </div>
-            ```jsx
-{/* Case Parties */}
-<div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-    <UsersIcon className="w-5 h-5 text-amber-400" /> Case Parties
-  </h2>
-  
-  {/* Defendants */}
-  {selectedLead.defendants && (
-    <div className="mb-4">
-      <p className="text-sm font-semibold text-slate-300 mb-2">Defendants:</p>
-      <div className="space-y-2">
-        {selectedLead.defendants.split(';').map((def, i) => (
-          <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
-            <p className="text-white font-medium">{def.trim()}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )}
-  
-  {/* Plaintiffs */}
-  {selectedLead.plaintiffs && (
-    <div>
-      <p className="text-sm font-semibold text-slate-300 mb-2">Plaintiffs:</p>
-      <div className="space-y-2">
-        {selectedLead.plaintiffs.split(';').map((plt, i) => (
-          <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-blue-500/20">
-            <p className="text-white font-medium">{plt.trim()}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )}
-</div>
 
-{/* Property Details */}
-<div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-    <MapPin className="w-5 h-5 text-amber-400" /> Property Details
-  </h2>
-  
-  {/* Property Address */}
-  <div className="mb-4 p-3 bg-slate-900/50 rounded-lg">
-    <p className="text-slate-400 text-sm mb-1">Property Address</p>
-    <p className="text-white font-semibold text-lg">{selectedLead.property_address}</p>
-    {selectedLead.property_city && (
-      <p className="text-slate-300 text-sm">
-        {selectedLead.property_city}
-        {selectedLead.property_zip && `, ${selectedLead.property_zip}`}
-      </p>
-    )}
-  </div>
-  
-  {/* Parcel ID */}
-  {selectedLead.parcel_id && (
-    <div className="mb-4 p-3 bg-slate-900/50 rounded-lg">
-      <p className="text-slate-400 text-sm mb-1">Parcel ID</p>
-      <p className="text-white font-mono">{selectedLead.parcel_id}</p>
-    </div>
-  )}
-  
-  {/* Financial Grid */}
-  <div className="grid grid-cols-2 gap-4 mb-4">
-    <div className="p-3 bg-slate-900/50 rounded-lg">
-      <p className="text-slate-400 text-sm mb-1">Assessed Value</p>
-      <p className="text-white font-semibold text-lg">{selectedLead.assessed_value || 'N/A'}</p>
-    </div>
-    <div className="p-3 bg-slate-900/50 rounded-lg">
-      <p className="text-slate-400 text-sm mb-1">Judgment Amount</p>
-      <p className="text-white font-semibold text-lg">{selectedLead.judgment_amount || 'N/A'}</p>
-    </div>
-    <div className="p-3 bg-slate-900/50 rounded-lg">
-      <p className="text-slate-400 text-sm mb-1">Sold Amount</p>
-      <p className="text-white font-semibold text-lg">{selectedLead.sold_amount || 'N/A'}</p>
-    </div>
-    <div className="p-3 bg-slate-900/50 rounded-lg">
-      <p className="text-slate-400 text-sm mb-1">Auction Date</p>
-      <p className="text-white font-semibold">{selectedLead.auction_date || 'N/A'}</p>
-    </div>
-  </div>
-  
-  {/* Links */}
-  <div className="flex flex-wrap gap-3">
-    {selectedLead.case_url && (
-      <a href={selectedLead.case_url} target="_blank" rel="noopener noreferrer" 
-         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
-        View Case →
-      </a>
-    )}
-    {selectedLead.zillow_url && (
-      <a href={selectedLead.zillow_url} target="_blank" rel="noopener noreferrer" 
-         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
-        View on Zillow →
-      </a>
-    )}
-    {selectedLead.property_appraiser_url && (
-      <a href={selectedLead.property_appraiser_url} target="_blank" rel="noopener noreferrer" 
-         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
-        Property Appraiser →
-      </a>
-    )}
-  </div>
-</div>
-```
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <UsersIcon className="w-5 h-5 text-amber-400" /> Case Parties
+              </h2>
+              {selectedLead.defendants && (
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-slate-300 mb-2">Defendants:</p>
+                  <div className="space-y-2">
+                    {selectedLead.defendants.split(';').map((def, i) => (
+                      <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
+                        <p className="text-white font-medium">{def.trim()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {selectedLead.plaintiffs && (
+                <div>
+                  <p className="text-sm font-semibold text-slate-300 mb-2">Plaintiffs:</p>
+                  <div className="space-y-2">
+                    {selectedLead.plaintiffs.split(';').map((plt, i) => (
+                      <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-blue-500/20">
+                        <p className="text-white font-medium">{plt.trim()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-amber-400" /> Property Details
+              </h2>
+              <div className="mb-4 p-3 bg-slate-900/50 rounded-lg">
+                <p className="text-slate-400 text-sm mb-1">Property Address</p>
+                <p className="text-white font-semibold text-lg">{selectedLead.property_address}</p>
+                {selectedLead.property_city && (
+                  <p className="text-slate-300 text-sm">
+                    {selectedLead.property_city}
+                    {selectedLead.property_zip && `, ${selectedLead.property_zip}`}
+                  </p>
+                )}
+              </div>
+              {selectedLead.parcel_id && (
+                <div className="mb-4 p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Parcel ID</p>
+                  <p className="text-white font-mono">{selectedLead.parcel_id}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Assessed Value</p>
+                  <p className="text-white font-semibold text-lg">{selectedLead.assessed_value || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Judgment Amount</p>
+                  <p className="text-white font-semibold text-lg">{selectedLead.judgment_amount || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Sold Amount</p>
+                  <p className="text-white font-semibold text-lg">{selectedLead.sold_amount || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Auction Date</p>
+                  <p className="text-white font-semibold">{selectedLead.auction_date || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {selectedLead.case_url && (
+                  <a href={selectedLead.case_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    View Case →
+                  </a>
+                )}
+                {selectedLead.zillow_url && (
+                  <a href={selectedLead.zillow_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    View on Zillow →
+                  </a>
+                )}
+                {selectedLead.property_appraiser_url && (
+                  <a href={selectedLead.property_appraiser_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    Property Appraiser →
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
+
           <div className="space-y-6">
             {user?.role === 'admin' && (
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
@@ -555,14 +681,14 @@ const [selectedTarget, setSelectedTarget] = useState(null)
                 <User className="w-5 h-5 text-amber-400" />
                 Contacts
               </h3>
-             <ContactsSection 
-  contacts={leadContacts}
-  lead={selectedLead}
-  onSkipTrace={(selected) => {
-    setSelectedTarget(selected)
-    setShowSkipTrace(true)
-  }}
-/>
+              <ContactsSection 
+                contacts={leadContacts}
+                lead={selectedLead}
+                onSkipTrace={(selected) => {
+                  setSelectedTarget(selected)
+                  setShowSkipTrace(true)
+                }}
+              />
             </div>
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">Notes</h3>
@@ -584,20 +710,19 @@ const [selectedTarget, setSelectedTarget] = useState(null)
         </div>
       </div>
       {showSkipTrace && (
-  <SkipTraceModal
-    leadId={selectedLead.id}
-    defendantName={selectedTarget?.name || selectedLead.defendants?.split(';')[0]?.trim()}
-    onClose={() => {
-      setShowSkipTrace(false)
-      setSelectedTarget(null)
-    }}
-    onSave={saveSkipTrace}
-  />
-)}
+        <SkipTraceModal
+          leadId={selectedLead.id}
+          defendantName={selectedTarget?.name || selectedLead.defendants?.split(';')[0]?.trim()}
+          onClose={() => {
+            setShowSkipTrace(false)
+            setSelectedTarget(null)
+          }}
+          onSave={saveSkipTrace}
+        />
+      )}
     </div>
   )
-// DASHBOARD
-  return (
+return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 sticky top-0 z-50 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -676,10 +801,21 @@ const [selectedTarget, setSelectedTarget] = useState(null)
             </div>
             <p className="text-3xl font-bold text-blue-400">{stats.future}</p>
           </div>
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 col-span-2 md:col-span-3 lg:col-span-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-slate-400 text-sm">Total Recoverable Surplus</span>
+                <p className="text-4xl font-bold text-emerald-400 mt-1">
+                  ${stats.totalSurplus.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <DollarSign className="w-12 h-12 text-emerald-400" />
+            </div>
+          </div>
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search leads..." className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500" />
@@ -692,6 +828,10 @@ const [selectedTarget, setSelectedTarget] = useState(null)
               <option value="all">All Types</option>
               <option>Surplus</option>
               <option>Future Auction</option>
+            </select>
+            <select value={filters.state} onChange={e => setFilters({ ...filters, state: e.target.value })} className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg">
+              <option value="all">All States</option>
+              {states.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <select value={filters.county} onChange={e => setFilters({ ...filters, county: e.target.value })} className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg">
               <option value="all">All Counties</option>
@@ -735,9 +875,16 @@ const [selectedTarget, setSelectedTarget] = useState(null)
                     }`}>{l.status}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <button onClick={() => viewLead(l)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">
-                      <Eye className="w-4 h-4" /> View
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => viewLead(l)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">
+                        <Eye className="w-4 h-4" /> View
+                      </button>
+                      {user?.role === 'admin' && (
+                        <button onClick={() => deleteLead(l.id, l.case_number)} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm">
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
