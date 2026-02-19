@@ -674,15 +674,15 @@ export default function App() {
             </div>
             <p className="text-3xl font-bold text-blue-400">{stats.future}</p>
           </div>
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 col-span-2 md:col-span-3 lg:col-span-6">
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 col-span-2 md:col-span-3 lg:col-span-6">
             <div className="flex items-center justify-between">
-              <div>
-                <span className="text-slate-400 text-sm">Total Recoverable Surplus</span>
-                <p className="text-4xl font-bold text-emerald-400 mt-1">
-                  ${stats.totalSurplus.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <div className="flex-1">
+                <span className="text-slate-400 text-xs font-medium">Total Recoverable</span>
+                <p className="text-3xl font-bold text-emerald-400">
+                  ${stats.totalSurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                 </p>
               </div>
-              <DollarSign className="w-12 h-12 text-emerald-400" />
+              <DollarSign className="w-8 h-8 text-emerald-400 opacity-50" />
             </div>
           </div>
         </div>
@@ -714,34 +714,34 @@ export default function App() {
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-          <table className="w-full table-fixed">
+          <table className="w-full">
             <thead>
               <tr className="bg-slate-900/50 border-b border-slate-700/50">
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-28">Case #</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-24">County</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300">Property</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-20">Type</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-20">Date</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-24">Surplus</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-20">Status</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-300 w-32">Action</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '110px'}}>Case #</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '90px'}}>County</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300">Property</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '60px'}}>Type</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '75px'}}>Date</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '90px'}}>Surplus</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '75px'}}>Status</th>
+                <th className="text-left px-2 py-2 text-xs font-semibold text-slate-300" style={{width: '120px'}}>Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((l, i) => (
                 <tr key={l.id} className={`border-b border-slate-700/30 hover:bg-slate-700/30 ${i % 2 === 0 ? 'bg-slate-900/20' : ''}`}>
-                  <td className="px-3 py-3 text-white font-mono text-xs truncate">{l.case_number}</td>
-                  <td className="px-3 py-3 text-slate-300 text-xs">{l.county?.split('-')[1] || l.county}</td>
-                  <td className="px-3 py-3 text-white text-xs truncate">{l.property_address}</td>
-                  <td className="px-3 py-3">
-                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                  <td className="px-2 py-2 text-white font-mono text-xs truncate" style={{width: '110px'}}>{l.case_number}</td>
+                  <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
+                  <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
+                  <td className="px-2 py-2" style={{width: '60px'}}>
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                       {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-slate-300 text-xs whitespace-nowrap">{l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}</td>
-                  <td className="px-3 py-3 text-emerald-400 font-semibold text-xs whitespace-nowrap">{l.surplus || '—'}</td>
-                  <td className="px-3 py-3">
-                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
+                  <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>{l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}</td>
+                  <td className="px-2 py-2 text-emerald-400 font-semibold text-xs truncate" style={{width: '90px'}}>{l.surplus || '—'}</td>
+                  <td className="px-2 py-2" style={{width: '75px'}}>
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${
                       l.status === 'New' ? 'bg-blue-500/20 text-blue-400' :
                       l.status === 'Contacted' ? 'bg-amber-500/20 text-amber-400' :
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -749,13 +749,13 @@ export default function App() {
                       'bg-red-500/20 text-red-400'
                     }`}>{l.status === 'Not Interested' ? 'NoInt' : l.status}</span>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-2" style={{width: '120px'}}>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => viewLead(l)} className="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs whitespace-nowrap">
+                      <button onClick={() => viewLead(l)} className="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs">
                         <Eye className="w-3 h-3" /> View
                       </button>
                       {user?.role === 'admin' && (
-                        <button onClick={() => deleteLead(l.id, l.case_number)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs whitespace-nowrap">
+                        <button onClick={() => deleteLead(l.id, l.case_number)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
                           Del
                         </button>
                       )}
