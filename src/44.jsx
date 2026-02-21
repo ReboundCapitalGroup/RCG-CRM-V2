@@ -24,14 +24,10 @@ export default function App() {
   const [editingNote, setEditingNote] = useState(null)
   const [editNoteText, setEditNoteText] = useState('')
 
-  useEffect(() => {
-    if (user) loadData()
-  }, [user])
-
-  useEffect(() => {
+ useEffect(() => {
     if (user?.role !== 'admin') {
       const style = document.createElement('style')
-      style.innerHTML = \`
+      style.innerHTML = `
         * {
           -webkit-user-select: none !important;
           -moz-user-select: none !important;
@@ -44,13 +40,14 @@ export default function App() {
           -ms-user-select: text !important;
           user-select: text !important;
         }
-      \`
+      `
       document.head.appendChild(style)
       
       document.addEventListener('contextmenu', (e) => e.preventDefault())
       document.addEventListener('copy', (e) => e.preventDefault())
       document.addEventListener('cut', (e) => e.preventDefault())
       
+      // SCARY SCREENSHOT ALERT CODE STARTS HERE
       let screenshotAttempts = 0
       
       const handleScreenshot = async () => {
@@ -59,15 +56,15 @@ export default function App() {
         navigator.clipboard.writeText('')
         
         if (screenshotAttempts === 1) {
-          alert('⚠️ SECURITY ALERT ⚠️\\n\\nScreenshot detected!\\n\\nAdmin has been notified of this activity.\\n\\nYour account: ' + user.name + '\\nTimestamp: ' + new Date().toLocaleString() + '\\n\\nUnauthorized screenshots of company data are strictly prohibited.\\n\\nContinued violations will result in immediate account suspension and legal action.')
+          alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
         } else if (screenshotAttempts === 2) {
-          alert('🚨 FINAL WARNING 🚨\\n\\nSecond screenshot attempt detected!\\n\\nAdmin notification sent with your user details.\\n\\nOne more attempt will trigger automatic account lockout.\\n\\nYou are being monitored.')
+          alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
         } else if (screenshotAttempts >= 3) {
-          alert('🔴 ACCOUNT FLAGGED 🔴\\n\\nMultiple screenshot violations detected.\\n\\nYour account has been flagged for review.\\n\\nAdmin will contact you shortly.\\n\\nAll your activity is being logged.')
+          alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
           
           await supabase.from('notes').insert([{
             lead_id: selectedLead?.id || null,
-            text: \`🚨 SECURITY ALERT: User \${user.name} (\${user.username}) attempted \${screenshotAttempts} screenshots at \${new Date().toLocaleString()}\`,
+            text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
             author: 'SYSTEM',
             created_at: new Date().toISOString()
           }])
@@ -79,6 +76,7 @@ export default function App() {
           handleScreenshot()
         }
       })
+      // SCARY SCREENSHOT ALERT CODE ENDS HERE
       
       document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
@@ -133,13 +131,13 @@ export default function App() {
   const loadContacts = async (leadId) => {
     const { data: contacts } = await supabase
       .from('contacts')
-      .select(\`
+      .select(`
         *,
         phones:phone_numbers(*),
         emails:emails(*),
         addresses:addresses(*),
         relatives:relatives(*, relative:relative_contact_id(*))
-      \`)
+      `)
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
     
@@ -148,11 +146,6 @@ export default function App() {
 
   const saveSkipTrace = async (data) => {
     const { contact, relatives } = data
-    
-    if (!selectedLead || !selectedLead.id) {
-      alert('ERROR: No lead selected!')
-      return
-    }
     
     try {
       const contactData = {
@@ -171,20 +164,15 @@ export default function App() {
         notes: contact.notes || null
       }
       
-      const { data: insertedContact, error: contactError } = await supabase
+      const { data: insertedContact } = await supabase
         .from('contacts')
         .insert([contactData])
         .select()
         .single()
       
-      if (contactError) {
-        alert('Failed to save contact: ' + contactError.message)
-        return
-      }
-      
       if (insertedContact) {
         const phones = contact.phones
-          .filter(p => p.number && p.number.trim())
+          .filter(p => p.number.trim())
           .map((p, i) => ({
             contact_id: insertedContact.id,
             phone_number: p.number,
@@ -198,7 +186,7 @@ export default function App() {
         }
         
         const emails = contact.emails
-          .filter(e => e.email && e.email.trim())
+          .filter(e => e.email.trim())
           .map((e, i) => ({
             contact_id: insertedContact.id,
             email_address: e.email,
@@ -211,7 +199,7 @@ export default function App() {
           await supabase.from('emails').insert(emails)
         }
         
-        if (contact.address && contact.address.trim()) {
+        if (contact.address) {
           await supabase.from('addresses').insert([{
             contact_id: insertedContact.id,
             street_address: contact.address,
@@ -225,7 +213,7 @@ export default function App() {
         }
         
         for (const relative of relatives) {
-          if (!relative.name || !relative.name.trim()) continue
+          if (!relative.name.trim()) continue
           
           const relData = {
             lead_id: selectedLead.id,
@@ -253,7 +241,7 @@ export default function App() {
             }])
             
             const relPhones = relative.phones
-              .filter(p => p.number && p.number.trim())
+              .filter(p => p.number.trim())
               .map(p => ({
                 contact_id: relContact.id,
                 phone_number: p.number,
@@ -283,6 +271,7 @@ export default function App() {
         alert('Contact saved successfully!')
       }
     } catch (err) {
+      console.error(err)
       alert('Failed to save contact: ' + err.message)
     }
   }
@@ -393,7 +382,7 @@ export default function App() {
       await supabase.from('leads').upsert(formatted)
       loadData()
       setUploadText('')
-      alert(\`Uploaded \${data.length} leads!\`)
+      alert(`Uploaded ${data.length} leads!`)
     } catch {
       alert('Invalid JSON')
     }
@@ -403,7 +392,7 @@ export default function App() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = \`leads_\${new Date().toISOString().split('T')[0]}.json\`
+    a.download = `leads_${new Date().toISOString().split('T')[0]}.json`
     a.click()
   }
 
@@ -534,7 +523,7 @@ export default function App() {
                   <p className="text-white font-medium">{u.name}</p>
                   <p className="text-slate-400 text-sm">@{u.username} • {u.role}</p>
                 </div>
-                <span className={\`px-3 py-1 rounded-full text-xs font-semibold \${u.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${u.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
                   {u.role.toUpperCase()}
                 </span>
               </div>
@@ -561,7 +550,7 @@ export default function App() {
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <span className={\`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 \${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 ${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                     {selectedLead.lead_type}
                   </span>
                   <h1 className="text-3xl font-bold text-white mb-2">{selectedLead.property_address}</h1>
@@ -621,7 +610,7 @@ export default function App() {
                 {selectedLead.property_city && (
                   <p className="text-slate-300 text-sm">
                     {selectedLead.property_city}
-                    {selectedLead.property_zip && \`, \${selectedLead.property_zip}\`}
+                    {selectedLead.property_zip && `, ${selectedLead.property_zip}`}
                   </p>
                 )}
               </div>
@@ -798,7 +787,7 @@ export default function App() {
             )}
             <div className="flex items-center gap-3 px-4 py-2 bg-slate-700/50 rounded-lg">
               <span className="text-white font-medium">{user?.name}</span>
-              <span className={\`px-2 py-1 rounded text-xs font-semibold \${user?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+              <span className={`px-2 py-1 rounded text-xs font-semibold ${user?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
                 {user?.role?.toUpperCase()}
               </span>
             </div>
@@ -858,7 +847,7 @@ export default function App() {
               <div className="flex-1">
                 <span className="text-slate-400 text-xs font-medium">Total Recoverable</span>
                 <p className="text-3xl font-bold text-emerald-400">
-                  \${stats.totalSurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  ${stats.totalSurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-emerald-400 opacity-50" />
@@ -877,7 +866,7 @@ export default function App() {
                 setSortOrder('desc')
               }
             }}
-            className={\`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'date' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}\`}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${sortBy === 'date' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Date {sortBy === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
@@ -890,7 +879,7 @@ export default function App() {
                 setSortOrder('desc')
               }
             }}
-            className={\`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'surplus' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}\`}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${sortBy === 'surplus' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Surplus {sortBy === 'surplus' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
@@ -944,7 +933,7 @@ export default function App() {
                   </select>
                   <button 
                     onClick={() => {
-                      if (window.confirm(\`Delete \${selectedLeads.length} leads?\`)) {
+                      if (window.confirm(`Delete ${selectedLeads.length} leads?`)) {
                         selectedLeads.forEach(id => {
                           const lead = leads.find(l => l.id === id)
                           deleteLead(id, lead?.case_number)
@@ -998,7 +987,7 @@ export default function App() {
             </thead>
             <tbody>
               {sortedFiltered.map((l, i) => (
-                <tr key={l.id} className={\`border-b border-slate-700/30 hover:bg-slate-700/30 \${i % 2 === 0 ? 'bg-slate-900/20' : ''}\`}>
+                <tr key={l.id} className={`border-b border-slate-700/30 hover:bg-slate-700/30 ${i % 2 === 0 ? 'bg-slate-900/20' : ''}`}>
                   <td className="px-2 py-2" style={{width: '40px'}}>
                     <input 
                       type="checkbox"
@@ -1017,20 +1006,20 @@ export default function App() {
                   <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
                   <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
                   <td className="px-2 py-2" style={{width: '60px'}}>
-                    <span className={\`px-1 py-0.5 rounded text-xs font-semibold block text-center \${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                       {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>{l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}</td>
                   <td className="px-2 py-2 text-emerald-400 font-semibold text-xs truncate" style={{width: '90px'}}>{l.surplus || '—'}</td>
                   <td className="px-2 py-2" style={{width: '75px'}}>
-                    <span className={\`px-1 py-0.5 rounded text-xs font-semibold block text-center \${
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${
                       l.status === 'New' ? 'bg-blue-500/20 text-blue-400' :
                       l.status === 'Contacted' ? 'bg-amber-500/20 text-amber-400' :
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
                       l.status === 'Not Interested' ? 'bg-slate-500/20 text-slate-400' :
                       'bg-red-500/20 text-red-400'
-                    }\`}>{l.status === 'Not Interested' ? 'NoInt' : l.status}</span>
+                    }`}>{l.status === 'Not Interested' ? 'NoInt' : l.status}</span>
                   </td>
                   <td className="px-2 py-2" style={{width: '120px'}}>
                     <div className="flex items-center gap-1">
@@ -1039,7 +1028,7 @@ export default function App() {
                       </button>
                       {user?.role === 'admin' && (
                         <button onClick={() => {
-                          if (window.confirm(\`Delete \${l.case_number}?\`)) {
+                          if (window.confirm(`Delete ${l.case_number}?`)) {
                             deleteLead(l.id, l.case_number)
                           }
                         }} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
