@@ -24,11 +24,6 @@ export default function App() {
   const [editingNote, setEditingNote] = useState(null)
   const [editNoteText, setEditNoteText] = useState('')
 
-
-  useEffect(() => {
-    if (user) loadData()
-  }, [user])
-
  useEffect(() => {
     if (user?.role !== 'admin') {
       const style = document.createElement('style')
@@ -286,7 +281,6 @@ export default function App() {
     
     if (data) {
       setUser(data)
-      loadData()
       setView('dashboard')
     } else {
       alert('Invalid credentials')
