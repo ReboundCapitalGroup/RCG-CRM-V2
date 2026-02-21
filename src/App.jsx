@@ -339,6 +339,10 @@ export default function App() {
       <div className="text-amber-400 text-xl">Loading...</div>
     </div>
   )
+
+  if (view === 'login') return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-2xl p-8">
         <div className="text-center mb-8">
           <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'%3E%3Ctext x='10' y='60' font-family='Arial' font-size='40' font-weight='bold' fill='%233b82f6'%3ERCG%3C/text%3E%3Cpath d='M 150 20 L 180 50 L 150 80' stroke='%233b82f6' stroke-width='8' fill='none'/%3E%3C/svg%3E" alt="RCG" className="w-32 mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-white mb-2">Rebound Capital Group</h1>
