@@ -15,6 +15,7 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
   })
   
   const [relatives, setRelatives] = useState([])
+  const [showRelatives, setShowRelatives] = useState(false)
 
   const addPhone = () => {
     setContact({ ...contact, phones: [...contact.phones, { number: '', type: 'mobile' }] })
@@ -45,7 +46,7 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
   }
 
   const addRelative = () => {
-    setRelatives([...relatives, { name: '', relationship: '', phones: [{ number: '', type: 'mobile' }] }])
+    setRelatives([...relatives, { name: '', relationship: '', phones: [{ number: '', type: 'mobile' }], emails: [] }])
   }
 
   const removeRelative = (index) => {
@@ -71,6 +72,11 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
   }
 
   const handleSave = () => {
+    if (!contact.full_name.trim()) {
+      alert('Name is required')
+      return
+    }
+
     onSave({ contact, relatives })
   }
 
@@ -83,8 +89,8 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
               <User className="w-6 h-6 text-amber-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Add Contact Info</h2>
-              <p className="text-sm text-slate-400">Fill in any available information</p>
+              <h2 className="text-2xl font-bold text-white">Skip Trace Contact</h2>
+              <p className="text-sm text-slate-400">Add contact information manually</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
@@ -96,7 +102,7 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Full Name *</label>
                 <input
                   type="text"
                   value={contact.full_name}
@@ -349,7 +355,7 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
             onClick={handleSave}
             className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700"
           >
-            Save to CRM
+            Save Contact
           </button>
         </div>
       </div>
