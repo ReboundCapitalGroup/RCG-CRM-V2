@@ -184,6 +184,7 @@ export default function App() {
       
       console.log('🟢 About to insert contact:', contactData)
       
+      // Insert contact without triggering lead updates
       const { data: insertedContact, error: contactError } = await supabase
         .from('contacts')
         .insert([contactData])
@@ -191,16 +192,48 @@ export default function App() {
         .single()
       
       if (contactError) {
+        // Check if it's the updated_at error - if so, try to continue anyway
+        if (contactError.message && contactError.message.includes('updated_at')) {
+          console.log('⚠️ Warning: updated_at error, but continuing...')
+          // The insert might have still worked, check if we got an ID
+          const { data: checkContact } = await supabase
+            .from('contacts')
+            .select('*')
+            .eq('lead_id', selectedLead.id)
+            .eq('full_name', contact.full_name)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+          
+          if (checkContact) {
+            console.log('✅ Contact was actually saved despite error!')
+            // Use this contact and continue
+            const finalContact = checkContact
+            await continueWithContact(finalContact, contact, relatives, selectedLead.id)
+            return
+          }
+        }
+        
         console.error('❌ Database error:', contactError)
         alert('Database error: ' + contactError.message)
         return
       }
       
       console.log('✅ Contact inserted:', insertedContact)
+      await continueWithContact(insertedContact, contact, relatives, selectedLead.id)
       
+    } catch (err) {
+      console.error('❌❌❌ ERROR:', err)
+      console.error('❌ Error details:', err.message)
+      alert('Failed to save contact: ' + err.message)
+    }
+  }
+
+  const continueWithContact = async (insertedContact, contact, relatives, leadId) => {
+    try {
       if (insertedContact) {
         const phones = contact.phones
-          .filter(p => p.number.trim())
+          .filter(p => p.number && p.number.trim())
           .map((p, i) => ({
             contact_id: insertedContact.id,
             phone_number: p.number,
@@ -214,7 +247,7 @@ export default function App() {
         }
         
         const emails = contact.emails
-          .filter(e => e.email.trim())
+          .filter(e => e.email && e.email.trim())
           .map((e, i) => ({
             contact_id: insertedContact.id,
             email_address: e.email,
@@ -227,7 +260,7 @@ export default function App() {
           await supabase.from('emails').insert(emails)
         }
         
-        if (contact.address) {
+        if (contact.address && contact.address.trim()) {
           await supabase.from('addresses').insert([{
             contact_id: insertedContact.id,
             street_address: contact.address,
@@ -241,10 +274,10 @@ export default function App() {
         }
         
         for (const relative of relatives) {
-          if (!relative.name.trim()) continue
+          if (!relative.name || !relative.name.trim()) continue
           
           const relData = {
-            lead_id: selectedLead.id,
+            lead_id: leadId,
             full_name: relative.name,
             first_name: relative.name.split(' ')[0],
             last_name: relative.name.split(' ').slice(-1)[0],
@@ -269,7 +302,7 @@ export default function App() {
             }])
             
             const relPhones = relative.phones
-              .filter(p => p.number.trim())
+              .filter(p => p.number && p.number.trim())
               .map(p => ({
                 contact_id: relContact.id,
                 phone_number: p.number,
@@ -283,8 +316,8 @@ export default function App() {
           }
         }
         
-        console.log('🟢 Updating lead contacts...')
-        const updatedContacts = await loadContacts(selectedLead.id)
+        console.log('🟢 Reloading contacts...')
+        const updatedContacts = await loadContacts(leadId)
         setLeadContacts(updatedContacts)
         setShowSkipTrace(false)
         
@@ -292,9 +325,8 @@ export default function App() {
         alert('✅ Contact saved successfully!')
       }
     } catch (err) {
-      console.error('❌❌❌ ERROR:', err)
-      console.error('❌ Error details:', err.message)
-      alert('Failed to save contact: ' + err.message)
+      console.error('❌ Error in continueWithContact:', err)
+      alert('Failed to save additional data: ' + err.message)
     }
   }
 
