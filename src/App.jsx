@@ -398,7 +398,7 @@ export default function App() {
                   <p className="text-white font-medium">{u.name}</p>
                   <p className="text-slate-400 text-sm">@{u.username} • {u.role}</p>
                 </div>
-                <span className={\`px-3 py-1 rounded-full text-xs font-semibold \${u.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold \${u.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
                   {u.role.toUpperCase()}
                 </span>
               </div>
@@ -425,7 +425,7 @@ export default function App() {
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <span className={\`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 \${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 \${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                     {selectedLead.lead_type}
                   </span>
                   <h1 className="text-3xl font-bold text-white mb-2">{selectedLead.property_address}</h1>
@@ -485,7 +485,7 @@ export default function App() {
                 {selectedLead.property_city && (
                   <p className="text-slate-300 text-sm">
                     {selectedLead.property_city}
-                    {selectedLead.property_zip && \`, \${selectedLead.property_zip}\`}
+                    {selectedLead.property_zip && `, \${selectedLead.property_zip}`}
                   </p>
                 )}
               </div>
@@ -662,7 +662,7 @@ export default function App() {
             )}
             <div className="flex items-center gap-3 px-4 py-2 bg-slate-700/50 rounded-lg">
               <span className="text-white font-medium">{user?.name}</span>
-              <span className={\`px-2 py-1 rounded text-xs font-semibold \${user?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+              <span className={`px-2 py-1 rounded text-xs font-semibold \${user?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
                 {user?.role?.toUpperCase()}
               </span>
             </div>
@@ -741,7 +741,7 @@ export default function App() {
                 setSortOrder('desc')
               }
             }}
-            className={\`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'date' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}\`}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'date' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Date {sortBy === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
@@ -754,7 +754,7 @@ export default function App() {
                 setSortOrder('desc')
               }
             }}
-            className={\`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'surplus' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}\`}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'surplus' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Surplus {sortBy === 'surplus' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
@@ -808,7 +808,7 @@ export default function App() {
                   </select>
                   <button 
                     onClick={() => {
-                      if (window.confirm(\`Delete \${selectedLeads.length} leads?\`)) {
+                      if (window.confirm(`Delete \${selectedLeads.length} leads?`)) {
                         selectedLeads.forEach(id => {
                           const lead = leads.find(l => l.id === id)
                           deleteLead(id, lead?.case_number)
@@ -862,7 +862,7 @@ export default function App() {
             </thead>
             <tbody>
               {sortedFiltered.map((l, i) => (
-                <tr key={l.id} className={\`border-b border-slate-700/30 hover:bg-slate-700/30 \${i % 2 === 0 ? 'bg-slate-900/20' : ''}\`}>
+                <tr key={l.id} className={`border-b border-slate-700/30 hover:bg-slate-700/30 \${i % 2 === 0 ? 'bg-slate-900/20' : ''}`}>
                   <td className="px-2 py-2" style={{width: '40px'}}>
                     <input 
                       type="checkbox"
@@ -881,20 +881,20 @@ export default function App() {
                   <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
                   <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
                   <td className="px-2 py-2" style={{width: '60px'}}>
-                    <span className={\`px-1 py-0.5 rounded text-xs font-semibold block text-center \${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}\`}>
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center \${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                       {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>{l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}</td>
                   <td className="px-2 py-2 text-emerald-400 font-semibold text-xs truncate" style={{width: '90px'}}>{l.surplus || '—'}</td>
                   <td className="px-2 py-2" style={{width: '75px'}}>
-                    <span className={\`px-1 py-0.5 rounded text-xs font-semibold block text-center \${
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center \${
                       l.status === 'New' ? 'bg-blue-500/20 text-blue-400' :
                       l.status === 'Contacted' ? 'bg-amber-500/20 text-amber-400' :
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
                       l.status === 'Not Interested' ? 'bg-slate-500/20 text-slate-400' :
                       'bg-red-500/20 text-red-400'
-                    }\`}>{l.status === 'Not Interested' ? 'NoInt' : l.status}</span>
+                    }`}>{l.status === 'Not Interested' ? 'NoInt' : l.status}</span>
                   </td>
                   <td className="px-2 py-2" style={{width: '120px'}}>
                     <div className="flex items-center gap-1">
@@ -903,7 +903,7 @@ export default function App() {
                       </button>
                       {user?.role === 'admin' && (
                         <button onClick={() => {
-                          if (window.confirm(\`Delete \${l.case_number}?\`)) {
+                          if (window.confirm(`Delete \${l.case_number}?`)) {
                             deleteLead(l.id, l.case_number)
                           }
                         }} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
