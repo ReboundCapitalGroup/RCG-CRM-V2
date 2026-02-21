@@ -255,7 +255,14 @@ export default function App() {
           }
         }
         
-        // Skip updating lead metadata - not needed
+        await supabase
+          .from('leads')
+          .update({
+            skip_trace_status: 'completed',
+            skip_trace_date: new Date().toISOString(),
+            primary_contact_id: insertedContact.id
+          })
+          .eq('id', selectedLead.id)
         
         const updatedContacts = await loadContacts(selectedLead.id)
         setLeadContacts(updatedContacts)
