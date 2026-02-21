@@ -31,7 +31,7 @@ export default function App() {
   useEffect(() => {
     if (user?.role !== 'admin') {
       const style = document.createElement('style')
-      style.innerHTML = \`
+      style.innerHTML = `
         * {
           -webkit-user-select: none !important;
           -moz-user-select: none !important;
@@ -44,12 +44,41 @@ export default function App() {
           -ms-user-select: text !important;
           user-select: text !important;
         }
-      \`
+      `
       document.head.appendChild(style)
       
       document.addEventListener('contextmenu', (e) => e.preventDefault())
       document.addEventListener('copy', (e) => e.preventDefault())
       document.addEventListener('cut', (e) => e.preventDefault())
+      
+      let screenshotAttempts = 0
+      
+      const handleScreenshot = async () => {
+        screenshotAttempts++
+        
+        navigator.clipboard.writeText('')
+        
+        if (screenshotAttempts === 1) {
+          alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
+        } else if (screenshotAttempts === 2) {
+          alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
+        } else if (screenshotAttempts >= 3) {
+          alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
+          
+          await supabase.from('notes').insert([{
+            lead_id: selectedLead?.id || null,
+            text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
+            author: 'SYSTEM',
+            created_at: new Date().toISOString()
+          }])
+        }
+      }
+      
+      document.addEventListener('keyup', (e) => {
+        if (e.key === 'PrintScreen') {
+          handleScreenshot()
+        }
+      })
       
       document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
@@ -70,11 +99,15 @@ export default function App() {
         navigator.clipboard.writeText('')
       }, 1000)
       
+      const originalLog = console.log
+      console.log = () => {}
+      
       return () => {
         document.head.removeChild(style)
+        console.log = originalLog
       }
     }
-  }, [user])
+  }, [user, selectedLead])
 
   const loadData = async () => {
     setLoading(true)
@@ -100,13 +133,13 @@ export default function App() {
   const loadContacts = async (leadId) => {
     const { data: contacts } = await supabase
       .from('contacts')
-      .select(\`
+      .select(`
         *,
         phones:phone_numbers(*),
         emails:emails(*),
         addresses:addresses(*),
         relatives:relatives(*, relative:relative_contact_id(*))
-      \`)
+      `)
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
     
@@ -117,20 +150,16 @@ export default function App() {
     const { contact, relatives } = data
     
     if (!selectedLead || !selectedLead.id) {
-      alert('Please open a lead before adding contact info')
+      alert('ERROR: No lead selected!')
       return
     }
-    
-    const fullName = contact.full_name?.trim() || 'Unknown Contact'
-    const firstName = fullName.split(' ')[0] || 'Unknown'
-    const lastName = fullName.split(' ').slice(-1)[0] || 'Unknown'
     
     try {
       const contactData = {
         lead_id: selectedLead.id,
-        full_name: fullName,
-        first_name: firstName,
-        last_name: lastName,
+        full_name: contact.full_name,
+        first_name: contact.full_name.split(' ')[0],
+        last_name: contact.full_name.split(' ').slice(-1)[0],
         contact_type: 'defendant',
         age: contact.age || null,
         current_address: contact.address || null,
@@ -149,8 +178,7 @@ export default function App() {
         .single()
       
       if (contactError) {
-        alert('Error saving contact: ' + contactError.message)
-        console.error(contactError)
+        alert('Failed to save contact: ' + contactError.message)
         return
       }
       
@@ -159,7 +187,7 @@ export default function App() {
           .filter(p => p.number && p.number.trim())
           .map((p, i) => ({
             contact_id: insertedContact.id,
-            phone_number: p.number.trim(),
+            phone_number: p.number,
             phone_type: p.type,
             is_primary: i === 0,
             data_source: 'manual'
@@ -173,7 +201,7 @@ export default function App() {
           .filter(e => e.email && e.email.trim())
           .map((e, i) => ({
             contact_id: insertedContact.id,
-            email_address: e.email.trim(),
+            email_address: e.email,
             email_type: e.type,
             is_primary: i === 0,
             data_source: 'manual'
@@ -186,10 +214,10 @@ export default function App() {
         if (contact.address && contact.address.trim()) {
           await supabase.from('addresses').insert([{
             contact_id: insertedContact.id,
-            street_address: contact.address.trim(),
-            city: contact.city || null,
-            state: contact.state || null,
-            zip_code: contact.zip || null,
+            street_address: contact.address,
+            city: contact.city,
+            state: contact.state,
+            zip_code: contact.zip,
             address_type: 'current',
             is_current: true,
             data_source: 'manual'
@@ -199,14 +227,13 @@ export default function App() {
         for (const relative of relatives) {
           if (!relative.name || !relative.name.trim()) continue
           
-          const relFullName = relative.name.trim()
           const relData = {
             lead_id: selectedLead.id,
-            full_name: relFullName,
-            first_name: relFullName.split(' ')[0],
-            last_name: relFullName.split(' ').slice(-1)[0],
+            full_name: relative.name,
+            first_name: relative.name.split(' ')[0],
+            last_name: relative.name.split(' ').slice(-1)[0],
             contact_type: 'relative',
-            relationship: relative.relationship || 'relative',
+            relationship: relative.relationship,
             skip_traced: false,
             data_source: 'manual'
           }
@@ -229,7 +256,7 @@ export default function App() {
               .filter(p => p.number && p.number.trim())
               .map(p => ({
                 contact_id: relContact.id,
-                phone_number: p.number.trim(),
+                phone_number: p.number,
                 phone_type: p.type,
                 data_source: 'manual'
               }))
@@ -253,39 +280,12 @@ export default function App() {
         setLeadContacts(updatedContacts)
         setShowSkipTrace(false)
         
-        alert('Contact information saved!')
-      }
-    } catch (err) {
-      alert('Error: ' + err.message)
-      console.error(err)
-    }
-  }
-          .from('leads')
-          .update({
-            skip_trace_status: 'completed',
-            skip_trace_date: new Date().toISOString(),
-            primary_contact_id: insertedContact.id
-          })
-          .eq('id', selectedLead.id)
-        
-        const updatedContacts = await loadContacts(selectedLead.id)
-        setLeadContacts(updatedContacts)
-        setShowSkipTrace(false)
-        
         alert('Contact saved successfully!')
       }
     } catch (err) {
       alert('Failed to save contact: ' + err.message)
     }
   }
-
-  const login = async (e) => {
-    e.preventDefault()
-    const form = new FormData(e.target)
-    const { data } = await supabase
-      .from('users')
-      .select('*')
-      .eq('username', form.get('username'))
       .eq('password', form.get('password'))
       .single()
     
