@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, Trash2, Phone, Mail, Home } from 'lucide-react'
+import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2 } from 'lucide-react'
 import { supabase } from './supabase'
+import SkipTraceModal from './SkipTraceModal'
 import ContactsSection from './ContactsSection'
 
 export default function App() {
@@ -14,22 +15,97 @@ export default function App() {
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadText, setUploadText] = useState('')
+  const [showSkipTrace, setShowSkipTrace] = useState(false)
   const [leadContacts, setLeadContacts] = useState([])
+  const [selectedTarget, setSelectedTarget] = useState(null)
   const [selectedLeads, setSelectedLeads] = useState([])
   const [sortBy, setSortBy] = useState('date')
   const [sortOrder, setSortOrder] = useState('desc')
   const [editingNote, setEditingNote] = useState(null)
   const [editNoteText, setEditNoteText] = useState('')
-  const [expandedDefendant, setExpandedDefendant] = useState(null)
-  const [newPhone, setNewPhone] = useState('')
-  const [newPhoneType, setNewPhoneType] = useState('mobile')
-  const [newEmail, setNewEmail] = useState('')
-  const [newEmailType, setNewEmailType] = useState('personal')
-  const [newAddress, setNewAddress] = useState({ street: '', city: '', state: '', zip: '' })
 
-  useEffect(() => {
-    if (user) loadData()
-  }, [user])
+ useEffect(() => {
+    if (user?.role !== 'admin') {
+      const style = document.createElement('style')
+      style.innerHTML = `
+        * {
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          -ms-user-select: none !important;
+          user-select: none !important;
+        }
+        input, textarea {
+          -webkit-user-select: text !important;
+          -moz-user-select: text !important;
+          -ms-user-select: text !important;
+          user-select: text !important;
+        }
+      `
+      document.head.appendChild(style)
+      
+      document.addEventListener('contextmenu', (e) => e.preventDefault())
+      document.addEventListener('copy', (e) => e.preventDefault())
+      document.addEventListener('cut', (e) => e.preventDefault())
+      
+      // SCARY SCREENSHOT ALERT CODE STARTS HERE
+      let screenshotAttempts = 0
+      
+      const handleScreenshot = async () => {
+        screenshotAttempts++
+        
+        navigator.clipboard.writeText('')
+        
+        if (screenshotAttempts === 1) {
+          alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
+        } else if (screenshotAttempts === 2) {
+          alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
+        } else if (screenshotAttempts >= 3) {
+          alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
+          
+          await supabase.from('notes').insert([{
+            lead_id: selectedLead?.id || null,
+            text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
+            author: 'SYSTEM',
+            created_at: new Date().toISOString()
+          }])
+        }
+      }
+      
+      document.addEventListener('keyup', (e) => {
+        if (e.key === 'PrintScreen') {
+          handleScreenshot()
+        }
+      })
+      // SCARY SCREENSHOT ALERT CODE ENDS HERE
+      
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
+          e.preventDefault()
+          return false
+        }
+        if (e.ctrlKey && e.key === 'u') {
+          e.preventDefault()
+          return false
+        }
+        if (e.key === 'F12') {
+          e.preventDefault()
+          return false
+        }
+      })
+      
+      setInterval(() => {
+        navigator.clipboard.writeText('')
+      }, 1000)
+      
+      const originalLog = console.log
+      console.log = () => {}
+      
+      return () => {
+        document.head.removeChild(style)
+        console.log = originalLog
+      }
+    }
+  }, [user, selectedLead])
 
   const loadData = async () => {
     setLoading(true)
@@ -38,6 +114,7 @@ export default function App() {
         supabase.from('leads').select('*').order('created_at', { ascending: false }),
         supabase.from('users').select('*')
       ])
+      
       if (leadsRes.data) setLeads(leadsRes.data)
       if (usersRes.data) setUsers(usersRes.data)
     } catch (err) {
@@ -58,119 +135,150 @@ export default function App() {
         *,
         phones:phone_numbers(*),
         emails:emails(*),
-        addresses:addresses(*)
+        addresses:addresses(*),
+        relatives:relatives(*, relative:relative_contact_id(*))
       `)
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
+    
     return contacts || []
   }
 
-  const addPhoneToDefendant = async (defendantName) => {
-    if (!newPhone.trim()) return alert('Enter phone number')
+  const saveSkipTrace = async (data) => {
+    const { contact, relatives } = data
+    
     try {
-      let contact = leadContacts.find(c => c.full_name === defendantName)
-      
-      if (!contact) {
-        const { data: newContact } = await supabase.from('contacts').insert([{
-          lead_id: selectedLead.id,
-          full_name: defendantName,
-          first_name: defendantName.split(' ')[0],
-          last_name: defendantName.split(' ').slice(-1)[0],
-          contact_type: 'defendant',
-          data_source: 'manual'
-        }]).select().single()
-        contact = newContact
+      const contactData = {
+        lead_id: selectedLead.id,
+        full_name: contact.full_name,
+        first_name: contact.full_name.split(' ')[0],
+        last_name: contact.full_name.split(' ').slice(-1)[0],
+        contact_type: 'defendant',
+        age: contact.age || null,
+        current_address: contact.address || null,
+        current_city: contact.city || null,
+        current_state: contact.state || null,
+        skip_traced: true,
+        skip_trace_date: new Date().toISOString(),
+        data_source: 'manual',
+        notes: contact.notes || null
       }
       
-      await supabase.from('phone_numbers').insert([{
-        contact_id: contact.id,
-        phone_number: newPhone,
-        phone_type: newPhoneType,
-        data_source: 'manual'
-      }])
+      const { data: insertedContact } = await supabase
+        .from('contacts')
+        .insert([contactData])
+        .select()
+        .single()
       
-      setNewPhone('')
-      const updated = await loadContacts(selectedLead.id)
-      setLeadContacts(updated)
-      alert('Phone added!')
-    } catch (err) {
-      alert('Error: ' + err.message)
-    }
-  }
-
-  const addEmailToDefendant = async (defendantName) => {
-    if (!newEmail.trim()) return alert('Enter email')
-    try {
-      let contact = leadContacts.find(c => c.full_name === defendantName)
-      
-      if (!contact) {
-        const { data: newContact } = await supabase.from('contacts').insert([{
-          lead_id: selectedLead.id,
-          full_name: defendantName,
-          first_name: defendantName.split(' ')[0],
-          last_name: defendantName.split(' ').slice(-1)[0],
-          contact_type: 'defendant',
-          data_source: 'manual'
-        }]).select().single()
-        contact = newContact
+      if (insertedContact) {
+        const phones = contact.phones
+          .filter(p => p.number.trim())
+          .map((p, i) => ({
+            contact_id: insertedContact.id,
+            phone_number: p.number,
+            phone_type: p.type,
+            is_primary: i === 0,
+            data_source: 'manual'
+          }))
+        
+        if (phones.length > 0) {
+          await supabase.from('phone_numbers').insert(phones)
+        }
+        
+        const emails = contact.emails
+          .filter(e => e.email.trim())
+          .map((e, i) => ({
+            contact_id: insertedContact.id,
+            email_address: e.email,
+            email_type: e.type,
+            is_primary: i === 0,
+            data_source: 'manual'
+          }))
+        
+        if (emails.length > 0) {
+          await supabase.from('emails').insert(emails)
+        }
+        
+        if (contact.address) {
+          await supabase.from('addresses').insert([{
+            contact_id: insertedContact.id,
+            street_address: contact.address,
+            city: contact.city,
+            state: contact.state,
+            zip_code: contact.zip,
+            address_type: 'current',
+            is_current: true,
+            data_source: 'manual'
+          }])
+        }
+        
+        for (const relative of relatives) {
+          if (!relative.name.trim()) continue
+          
+          const relData = {
+            lead_id: selectedLead.id,
+            full_name: relative.name,
+            first_name: relative.name.split(' ')[0],
+            last_name: relative.name.split(' ').slice(-1)[0],
+            contact_type: 'relative',
+            relationship: relative.relationship,
+            skip_traced: false,
+            data_source: 'manual'
+          }
+          
+          const { data: relContact } = await supabase
+            .from('contacts')
+            .insert([relData])
+            .select()
+            .single()
+          
+          if (relContact) {
+            await supabase.from('relatives').insert([{
+              contact_id: insertedContact.id,
+              relative_contact_id: relContact.id,
+              relationship_type: relative.relationship || 'relative',
+              data_source: 'manual'
+            }])
+            
+            const relPhones = relative.phones
+              .filter(p => p.number.trim())
+              .map(p => ({
+                contact_id: relContact.id,
+                phone_number: p.number,
+                phone_type: p.type,
+                data_source: 'manual'
+              }))
+            
+            if (relPhones.length > 0) {
+              await supabase.from('phone_numbers').insert(relPhones)
+            }
+          }
+        }
+        
+        await supabase
+        
+        const updatedContacts = await loadContacts(selectedLead.id)
+        setLeadContacts(updatedContacts)
+        setShowSkipTrace(false)
+        
+        alert('Contact saved successfully!')
       }
-      
-      await supabase.from('emails').insert([{
-        contact_id: contact.id,
-        email_address: newEmail,
-        email_type: newEmailType,
-        data_source: 'manual'
-      }])
-      
-      setNewEmail('')
-      const updated = await loadContacts(selectedLead.id)
-      setLeadContacts(updated)
-      alert('Email added!')
     } catch (err) {
-      alert('Error: ' + err.message)
-    }
-  }
-
-  const addAddressToDefendant = async (defendantName) => {
-    if (!newAddress.street.trim()) return alert('Enter address')
-    try {
-      let contact = leadContacts.find(c => c.full_name === defendantName)
-      
-      if (!contact) {
-        const { data: newContact } = await supabase.from('contacts').insert([{
-          lead_id: selectedLead.id,
-          full_name: defendantName,
-          first_name: defendantName.split(' ')[0],
-          last_name: defendantName.split(' ').slice(-1)[0],
-          contact_type: 'defendant',
-          data_source: 'manual'
-        }]).select().single()
-        contact = newContact
-      }
-      
-      await supabase.from('addresses').insert([{
-        contact_id: contact.id,
-        street_address: newAddress.street,
-        city: newAddress.city,
-        state: newAddress.state,
-        zip_code: newAddress.zip,
-        address_type: 'current',
-        data_source: 'manual'
-      }])
-      
-      setNewAddress({ street: '', city: '', state: '', zip: '' })
-      const updated = await loadContacts(selectedLead.id)
-      setLeadContacts(updated)
-      alert('Address added!')
-    } catch (err) {
-      alert('Error: ' + err.message)
+      console.error(err)
+      alert('Failed to save contact: ' + err.message)
     }
   }
 
   const login = async (e) => {
     e.preventDefault()
     const form = new FormData(e.target)
-    const { data } = await supabase.from('users').select('*').eq('username', form.get('username')).eq('password', form.get('password')).single()
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', form.get('username'))
+      .eq('password', form.get('password'))
+      .single()
+    
     if (data) {
       setUser(data)
       setView('dashboard')
@@ -194,10 +302,12 @@ export default function App() {
   const assign = async (id, userId) => {
     await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
     setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
-    if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, assigned_to: userId })
+    if (selectedLead?.id === id) {
+      setSelectedLead({ ...selectedLead, assigned_to: userId })
+    }
   }
 
-  const deleteLead = async (id) => {
+  const deleteLead = async (id, caseName) => {
     try {
       await supabase.from('leads').delete().eq('id', id)
       setLeads(leads.filter(l => l.id !== id))
@@ -209,12 +319,13 @@ export default function App() {
 
   const addNote = async () => {
     if (!note.trim() || !selectedLead) return
-    await supabase.from('notes').insert([{
+    const newNote = {
       lead_id: selectedLead.id,
       text: note,
       author: user.name,
       created_at: new Date().toISOString()
-    }])
+    }
+    await supabase.from('notes').insert([newNote])
     setNote('')
     const notes = await loadNotes(selectedLead.id)
     setSelectedLead({ ...selectedLead, notes })
@@ -241,12 +352,25 @@ export default function App() {
     try {
       const data = JSON.parse(uploadText)
       const formatted = data.map(l => ({
-        id: l.id, case_number: l.caseNumber, county: l.county, lead_type: l.leadType,
-        auction_date: l.auctionDate, property_address: l.propertyAddress, property_city: l.propertyCity,
-        property_zip: l.propertyZip, assessed_value: l.assessedValue, judgment_amount: l.judgmentAmount,
-        sold_amount: l.soldAmount, surplus: l.surplus, defendants: l.defendants, plaintiffs: l.plaintiffs,
-        parcel_id: l.parcelId, case_url: l.caseUrl, zillow_url: l.zillowUrl,
-        property_appraiser_url: l.propertyAppraiserUrl, status: l.status || 'New'
+        id: l.id,
+        case_number: l.caseNumber,
+        county: l.county,
+        lead_type: l.leadType,
+        auction_date: l.auctionDate,
+        property_address: l.propertyAddress,
+        property_city: l.propertyCity,
+        property_zip: l.propertyZip,
+        assessed_value: l.assessedValue,
+        judgment_amount: l.judgmentAmount,
+        sold_amount: l.soldAmount,
+        surplus: l.surplus,
+        defendants: l.defendants,
+        plaintiffs: l.plaintiffs,
+        parcel_id: l.parcelId,
+        case_url: l.caseUrl,
+        zillow_url: l.zillowUrl,
+        property_appraiser_url: l.propertyAppraiserUrl,
+        status: l.status || 'New'
       }))
       await supabase.from('leads').upsert(formatted)
       loadData()
@@ -266,7 +390,10 @@ export default function App() {
   }
 
   const viewLead = async (lead) => {
-    const [notes, contacts] = await Promise.all([loadNotes(lead.id), loadContacts(lead.id)])
+    const [notes, contacts] = await Promise.all([
+      loadNotes(lead.id),
+      loadContacts(lead.id)
+    ])
     setSelectedLead({ ...lead, notes })
     setLeadContacts(contacts)
     setView('detail')
@@ -288,8 +415,10 @@ export default function App() {
     }
     if (search) {
       const s = search.toLowerCase()
-      return (l.case_number?.toLowerCase().includes(s)) || (l.property_address?.toLowerCase().includes(s)) ||
-             (l.county?.toLowerCase().includes(s)) || (l.defendants?.toLowerCase().includes(s))
+      return (l.case_number?.toLowerCase().includes(s)) ||
+             (l.property_address?.toLowerCase().includes(s)) ||
+             (l.county?.toLowerCase().includes(s)) ||
+             (l.defendants?.toLowerCase().includes(s))
     }
     return true
   })
@@ -387,7 +516,7 @@ export default function App() {
                   <p className="text-white font-medium">{u.name}</p>
                   <p className="text-slate-400 text-sm">@{u.username} • {u.role}</p>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold \${u.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${u.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
                   {u.role.toUpperCase()}
                 </span>
               </div>
@@ -414,7 +543,7 @@ export default function App() {
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 \${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 ${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                     {selectedLead.lead_type}
                   </span>
                   <h1 className="text-3xl font-bold text-white mb-2">{selectedLead.property_address}</h1>
@@ -443,231 +572,122 @@ export default function App() {
                   <p className="text-sm font-semibold text-slate-300 mb-2">Defendants:</p>
                   <div className="space-y-2">
                     {selectedLead.defendants.split(';').map((def, i) => (
-
-  if (view === 'detail' && selectedLead) {
-    const defendants = selectedLead.defendants ? selectedLead.defendants.split(';').map(d => d.trim()) : []
-    
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <button onClick={() => setView('dashboard')} className="text-slate-400 hover:text-white">← Back</button>
-            <button onClick={logout} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center gap-2">
-              <LogOut className="w-4 h-4" /> Logout
-            </button>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 ${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      {selectedLead.lead_type}
-                    </span>
-                    <h1 className="text-3xl font-bold text-white mb-2">{selectedLead.property_address}</h1>
-                    <p className="text-slate-400">{selectedLead.county} • {selectedLead.case_number}</p>
-                  </div>
-                  <select value={selectedLead.status} onChange={e => updateStatus(selectedLead.id, e.target.value)} className="px-4 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg">
-                    <option>New</option><option>Contacted</option><option>Interested</option><option>Not Interested</option><option>Dead</option>
-                  </select>
-                </div>
-                {selectedLead.surplus && (
-                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="text-emerald-400 font-semibold">Surplus</span>
-                      <span className="text-2xl font-bold text-emerald-400">{selectedLead.surplus}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <UsersIcon className="w-5 h-5 text-amber-400" /> Defendants & Skip Trace
-                </h2>
-                <div className="space-y-4">
-                  {defendants.map((def, idx) => {
-                    const contact = leadContacts.find(c => c.full_name === def)
-                    const isExpanded = expandedDefendant === def
-                    
-                    return (
-                      <div key={idx} className="border border-slate-700/50 rounded-lg overflow-hidden">
-                        <button 
-                          onClick={() => setExpandedDefendant(isExpanded ? null : def)}
-                          className="w-full p-4 bg-slate-900/30 hover:bg-slate-900/50 text-left flex items-center justify-between"
-                        >
-                          <span className="text-white font-medium">👤 {def}</span>
-                          <span className="text-slate-400">{isExpanded ? '▼' : '▶'}</span>
-                        </button>
-                        
-                        {isExpanded && (
-                          <div className="p-4 space-y-4 bg-slate-900/20">
-                            <div className="space-y-2">
-                              <label className="text-sm text-slate-300 flex items-center gap-2">
-                                <Phone className="w-4 h-4" /> Add Phone
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="tel"
-                                  value={newPhone}
-                                  onChange={e => setNewPhone(e.target.value)}
-                                  placeholder="Phone number"
-                                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                                />
-                                <select value={newPhoneType} onChange={e => setNewPhoneType(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm">
-                                  <option value="mobile">Mobile</option>
-                                  <option value="home">Home</option>
-                                  <option value="work">Work</option>
-                                </select>
-                                <button onClick={() => addPhoneToDefendant(def)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded text-sm">
-                                  + Add
-                                </button>
-                              </div>
-                              {contact?.phones?.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {contact.phones.map(p => (
-                                    <div key={p.id} className="text-sm text-emerald-400">✓ {p.phone_number} - {p.phone_type}</div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <label className="text-sm text-slate-300 flex items-center gap-2">
-                                <Mail className="w-4 h-4" /> Add Email
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="email"
-                                  value={newEmail}
-                                  onChange={e => setNewEmail(e.target.value)}
-                                  placeholder="Email address"
-                                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                                />
-                                <select value={newEmailType} onChange={e => setNewEmailType(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm">
-                                  <option value="personal">Personal</option>
-                                  <option value="work">Work</option>
-                                </select>
-                                <button onClick={() => addEmailToDefendant(def)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded text-sm">
-                                  + Add
-                                </button>
-                              </div>
-                              {contact?.emails?.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {contact.emails.map(e => (
-                                    <div key={e.id} className="text-sm text-emerald-400">✓ {e.email_address} - {e.email_type}</div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <label className="text-sm text-slate-300 flex items-center gap-2">
-                                <Home className="w-4 h-4" /> Add Address
-                              </label>
-                              <input
-                                type="text"
-                                value={newAddress.street}
-                                onChange={e => setNewAddress({...newAddress, street: e.target.value})}
-                                placeholder="Street address"
-                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                              />
-                              <div className="grid grid-cols-3 gap-2">
-                                <input
-                                  type="text"
-                                  value={newAddress.city}
-                                  onChange={e => setNewAddress({...newAddress, city: e.target.value})}
-                                  placeholder="City"
-                                  className="px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                                />
-                                <input
-                                  type="text"
-                                  value={newAddress.state}
-                                  onChange={e => setNewAddress({...newAddress, state: e.target.value})}
-                                  placeholder="State"
-                                  maxLength={2}
-                                  className="px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                                />
-                                <input
-                                  type="text"
-                                  value={newAddress.zip}
-                                  onChange={e => setNewAddress({...newAddress, zip: e.target.value})}
-                                  placeholder="ZIP"
-                                  className="px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                                />
-                              </div>
-                              <button onClick={() => addAddressToDefendant(def)} className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded text-sm">
-                                Save Address
-                              </button>
-                              {contact?.addresses?.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {contact.addresses.map(a => (
-                                    <div key={a.id} className="text-sm text-emerald-400">
-                                      ✓ {a.street_address}, {a.city}, {a.state} {a.zip_code}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                      <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
+                        <p className="text-white font-medium">{def.trim()}</p>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              {user?.role === 'admin' && (
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">Assign</h3>
-                  <select value={selectedLead.assigned_to || ''} onChange={e => assign(selectedLead.id, e.target.value || null)} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg">
-                    <option value="">Unassigned</option>
-                    {users.filter(u => u.role === 'user').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
+                    ))}
+                  </div>
                 </div>
               )}
-              
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-lg font-bold text-white mb-4">Notes</h3>
-                <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
-                  {(selectedLead.notes || []).map(n => (
-                    <div key={n.id} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="text-slate-400 text-xs font-medium">{n.author}</span>
-                        <div className="flex gap-2">
-                          <span className="text-slate-500 text-xs">{new Date(n.created_at).toLocaleDateString()}</span>
-                          <button onClick={() => { setEditingNote(n.id); setEditNoteText(n.text) }} className="text-amber-400 text-xs hover:underline">Edit</button>
-                          <button onClick={() => deleteNote(n.id)} className="text-red-400 text-xs hover:underline">Delete</button>
-                        </div>
+              {selectedLead.plaintiffs && (
+                <div>
+                  <p className="text-sm font-semibold text-slate-300 mb-2">Plaintiffs:</p>
+                  <div className="space-y-2">
+                    {selectedLead.plaintiffs.split(';').map((plt, i) => (
+                      <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-blue-500/20">
+                        <p className="text-white font-medium">{plt.trim()}</p>
                       </div>
-                      {editingNote === n.id ? (
-                        <div className="space-y-2">
-                          <textarea value={editNoteText} onChange={e => setEditNoteText(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm" rows={2} />
-                          <div className="flex gap-2">
-                            <button onClick={() => updateNote(n.id, editNoteText)} className="px-3 py-1 bg-amber-500 text-white rounded text-xs">Save</button>
-                            <button onClick={() => { setEditingNote(null); setEditNoteText('') }} className="px-3 py-1 bg-slate-600 text-white rounded text-xs">Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-white text-sm">{n.text}</p>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-                <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add note..." className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white resize-none" rows={3} />
-                <button onClick={addNote} className="mt-2 w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-semibold">Add Note</button>
+              )}
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-amber-400" /> Property Details
+              </h2>
+              <div className="mb-4 p-3 bg-slate-900/50 rounded-lg">
+                <p className="text-slate-400 text-sm mb-1">Property Address</p>
+                <p className="text-white font-semibold text-lg">{selectedLead.property_address}</p>
+                {selectedLead.property_city && (
+                  <p className="text-slate-300 text-sm">
+                    {selectedLead.property_city}
+                    {selectedLead.property_zip && `, ${selectedLead.property_zip}`}
+                  </p>
+                )}
+              </div>
+              {selectedLead.parcel_id && (
+                <div className="mb-4 p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Parcel ID</p>
+                  <p className="text-white font-mono">{selectedLead.parcel_id}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Assessed Value</p>
+                  <p className="text-white font-semibold text-lg">{selectedLead.assessed_value || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Judgment Amount</p>
+                  <p className="text-white font-semibold text-lg">{selectedLead.judgment_amount || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Sold Amount</p>
+                  <p className="text-white font-semibold text-lg">{selectedLead.sold_amount || 'N/A'}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-lg">
+                  <p className="text-slate-400 text-sm mb-1">Auction Date</p>
+                  <p className="text-white font-semibold">{selectedLead.auction_date || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {selectedLead.case_url && (
+                  <a href={selectedLead.case_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    View Case →
+                  </a>
+                )}
+                {selectedLead.zillow_url && (
+                  <a href={selectedLead.zillow_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    View on Zillow →
+                  </a>
+                )}
+                {selectedLead.property_appraiser_url && (
+                  <a href={selectedLead.property_appraiser_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    Property Appraiser →
+                  </a>
+                )}
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    )
-  }
+
+          <div className="space-y-6">
+            {user?.role === 'admin' && (
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+                <h3 className="text-lg font-bold text-white mb-4">Assign</h3>
+                <select value={selectedLead.assigned_to || ''} onChange={e => assign(selectedLead.id, e.target.value || null)} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg">
+                  <option value="">Unassigned</option>
+                  {users.filter(u => u.role === 'user').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <User className="w-5 h-5 text-amber-400" />
+                Contacts
+              </h3>
+              <ContactsSection 
+                contacts={leadContacts}
+                lead={selectedLead}
+                onSkipTrace={(selected) => {
+                  setSelectedTarget(selected)
+                  setShowSkipTrace(true)
+                }}
+              />
+            </div>
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Notes</h3>
+              <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                {(selectedLead.notes || []).map(n => (
+                  <div key={n.id} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/30">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-slate-400 text-xs font-medium">{n.author}</span>
+                      <div className="flex gap-2">
+                        <span className="text-slate-500 text-xs">{new Date(n.created_at).toLocaleDateString()}</span>
+                        <button 
                           onClick={() => {
                             setEditingNote(n.id)
                             setEditNoteText(n.text)
@@ -760,7 +780,7 @@ export default function App() {
             )}
             <div className="flex items-center gap-3 px-4 py-2 bg-slate-700/50 rounded-lg">
               <span className="text-white font-medium">{user?.name}</span>
-              <span className={`px-2 py-1 rounded text-xs font-semibold \${user?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
+              <span className={`px-2 py-1 rounded text-xs font-semibold ${user?.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
                 {user?.role?.toUpperCase()}
               </span>
             </div>
@@ -820,7 +840,7 @@ export default function App() {
               <div className="flex-1">
                 <span className="text-slate-400 text-xs font-medium">Total Recoverable</span>
                 <p className="text-3xl font-bold text-emerald-400">
-                  \${stats.totalSurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  ${stats.totalSurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-emerald-400 opacity-50" />
@@ -839,7 +859,7 @@ export default function App() {
                 setSortOrder('desc')
               }
             }}
-            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'date' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${sortBy === 'date' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Date {sortBy === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
@@ -852,7 +872,7 @@ export default function App() {
                 setSortOrder('desc')
               }
             }}
-            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 \${sortBy === 'surplus' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
+            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${sortBy === 'surplus' ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Surplus {sortBy === 'surplus' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
@@ -906,7 +926,7 @@ export default function App() {
                   </select>
                   <button 
                     onClick={() => {
-                      if (window.confirm(`Delete \${selectedLeads.length} leads?`)) {
+                      if (window.confirm(`Delete ${selectedLeads.length} leads?`)) {
                         selectedLeads.forEach(id => {
                           const lead = leads.find(l => l.id === id)
                           deleteLead(id, lead?.case_number)
@@ -960,7 +980,7 @@ export default function App() {
             </thead>
             <tbody>
               {sortedFiltered.map((l, i) => (
-                <tr key={l.id} className={`border-b border-slate-700/30 hover:bg-slate-700/30 \${i % 2 === 0 ? 'bg-slate-900/20' : ''}`}>
+                <tr key={l.id} className={`border-b border-slate-700/30 hover:bg-slate-700/30 ${i % 2 === 0 ? 'bg-slate-900/20' : ''}`}>
                   <td className="px-2 py-2" style={{width: '40px'}}>
                     <input 
                       type="checkbox"
@@ -979,14 +999,14 @@ export default function App() {
                   <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
                   <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
                   <td className="px-2 py-2" style={{width: '60px'}}>
-                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center \${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                       {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>{l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}</td>
                   <td className="px-2 py-2 text-emerald-400 font-semibold text-xs truncate" style={{width: '90px'}}>{l.surplus || '—'}</td>
                   <td className="px-2 py-2" style={{width: '75px'}}>
-                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center \${
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${
                       l.status === 'New' ? 'bg-blue-500/20 text-blue-400' :
                       l.status === 'Contacted' ? 'bg-amber-500/20 text-amber-400' :
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -1001,7 +1021,7 @@ export default function App() {
                       </button>
                       {user?.role === 'admin' && (
                         <button onClick={() => {
-                          if (window.confirm(`Delete \${l.case_number}?`)) {
+                          if (window.confirm(`Delete ${l.case_number}?`)) {
                             deleteLead(l.id, l.case_number)
                           }
                         }} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
