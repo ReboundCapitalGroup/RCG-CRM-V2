@@ -150,7 +150,20 @@ export default function App() {
   }
 
   const saveSkipTrace = async (data) => {
+    console.log('🟢 saveSkipTrace called!')
+    console.log('🟢 Data received:', data)
+    
     const { contact, relatives } = data
+    
+    console.log('🟢 Contact:', contact)
+    console.log('🟢 Relatives:', relatives)
+    console.log('🟢 Selected lead:', selectedLead)
+    
+    if (!selectedLead || !selectedLead.id) {
+      console.error('❌ No lead selected!')
+      alert('ERROR: No lead selected!')
+      return
+    }
     
     try {
       const contactData = {
@@ -169,11 +182,21 @@ export default function App() {
         notes: contact.notes || null
       }
       
-      const { data: insertedContact } = await supabase
+      console.log('🟢 About to insert contact:', contactData)
+      
+      const { data: insertedContact, error: contactError } = await supabase
         .from('contacts')
         .insert([contactData])
         .select()
         .single()
+      
+      if (contactError) {
+        console.error('❌ Database error:', contactError)
+        alert('Database error: ' + contactError.message)
+        return
+      }
+      
+      console.log('✅ Contact inserted:', insertedContact)
       
       if (insertedContact) {
         const phones = contact.phones
@@ -260,16 +283,17 @@ export default function App() {
           }
         }
         
-        // Skip updating lead metadata - not needed
-        
+        console.log('🟢 Updating lead contacts...')
         const updatedContacts = await loadContacts(selectedLead.id)
         setLeadContacts(updatedContacts)
         setShowSkipTrace(false)
         
-        alert('Contact saved successfully!')
+        console.log('✅✅✅ SUCCESS! Contact saved!')
+        alert('✅ Contact saved successfully!')
       }
     } catch (err) {
-      console.error(err)
+      console.error('❌❌❌ ERROR:', err)
+      console.error('❌ Error details:', err.message)
       alert('Failed to save contact: ' + err.message)
     }
   }
