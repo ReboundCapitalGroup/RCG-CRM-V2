@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2 } from 'lucide-react'
+import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2, Phone, Mail } from 'lucide-react'
 import { supabase } from './supabase'
 import SkipTraceModal from './SkipTraceModal'
-import ContactsSection from './ContactsSection'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -134,7 +133,8 @@ export default function App() {
   }
 
   const loadContacts = async (leadId) => {
-    const { data: contacts } = await supabase
+    console.log('📞 Loading contacts for lead:', leadId)
+    const { data: contacts, error } = await supabase
       .from('contacts')
       .select(`
         *,
@@ -145,6 +145,9 @@ export default function App() {
       `)
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
+    
+    console.log('📞 Loaded contacts:', contacts)
+    console.log('📞 Error (if any):', error)
     
     return contacts || []
   }
@@ -458,10 +461,12 @@ export default function App() {
   }
 
   const viewLead = async (lead) => {
+    console.log('👁️ Viewing lead:', lead.id)
     const [notes, contacts] = await Promise.all([
       loadNotes(lead.id),
       loadContacts(lead.id)
     ])
+    console.log('👁️ Setting leadContacts to:', contacts)
     setSelectedLead({ ...lead, notes })
     setLeadContacts(contacts)
     setView('detail')
@@ -745,6 +750,14 @@ export default function App() {
                   <Plus className="w-4 h-4" />
                   Add Details
                 </button>
+              </div>
+              
+              {/* DEBUG INFO */}
+              <div className="mb-4 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400">
+                DEBUG: leadContacts count = {leadContacts?.length || 0}
+                {leadContacts && leadContacts.length > 0 && (
+                  <div>First contact: {leadContacts[0]?.full_name}</div>
+                )}
               </div>
               
               {leadContacts && leadContacts.length > 0 ? (
