@@ -318,10 +318,16 @@ export default function App() {
         
         console.log('🟢 Reloading contacts...')
         const updatedContacts = await loadContacts(leadId)
+        console.log('🟢 Updated contacts:', updatedContacts)
         setLeadContacts(updatedContacts)
+        
+        // Also refresh the selected lead's notes in case we need full refresh
+        const notes = await loadNotes(leadId)
+        setSelectedLead({ ...selectedLead, notes })
+        
         setShowSkipTrace(false)
         
-        console.log('✅✅✅ SUCCESS! Contact saved!')
+        console.log('✅✅✅ SUCCESS! Contact saved and contacts reloaded!')
         alert('✅ Contact saved successfully!')
       }
     } catch (err) {
