@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { X, Plus, Trash2, User, Phone, Mail, Users } from 'lucide-react'
 
-export default function SkipTraceModal({ leadId, defendantName, onClose, onSave }) {
+export default function SkipTraceModal({ leadId, defendantName, existingContact, onClose, onSave }) {
   const [contact, setContact] = useState({
     full_name: defendantName || '',
     age: '',
@@ -16,6 +16,36 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
   
   const [relatives, setRelatives] = useState([])
   const [showRelatives, setShowRelatives] = useState(false)
+
+  // Load existing contact data when modal opens
+  useEffect(() => {
+    if (existingContact) {
+      console.log('📋 Loading existing contact:', existingContact)
+      setContact({
+        full_name: existingContact.full_name || defendantName || '',
+        age: existingContact.age || '',
+        phones: existingContact.phones && existingContact.phones.length > 0 
+          ? existingContact.phones.map(p => ({ number: p.phone_number, type: p.phone_type }))
+          : [{ number: '', type: 'mobile' }],
+        emails: existingContact.emails && existingContact.emails.length > 0
+          ? existingContact.emails.map(e => ({ email: e.email_address, type: e.email_type }))
+          : [{ email: '', type: 'personal' }],
+        address: existingContact.addresses && existingContact.addresses.length > 0 
+          ? existingContact.addresses[0].street_address 
+          : '',
+        city: existingContact.addresses && existingContact.addresses.length > 0 
+          ? existingContact.addresses[0].city 
+          : '',
+        state: existingContact.addresses && existingContact.addresses.length > 0 
+          ? existingContact.addresses[0].state 
+          : '',
+        zip: existingContact.addresses && existingContact.addresses.length > 0 
+          ? existingContact.addresses[0].zip_code 
+          : '',
+        notes: existingContact.notes || ''
+      })
+    }
+  }, [existingContact, defendantName])
 
   const addPhone = () => {
     setContact({ ...contact, phones: [...contact.phones, { number: '', type: 'mobile' }] })
@@ -73,8 +103,12 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
 
   const handleSave = () => {
     console.log('🔵 handleSave called')
-    console.log('🔵 Contact data:', contact)
-    console.log('🔵 Relatives data:', relatives)
+    console.log('🔵 Contact object:', contact)
+    console.log('🔵 Contact.full_name:', contact.full_name)
+    console.log('🔵 Contact.phones:', contact.phones)
+    console.log('🔵 Contact.emails:', contact.emails)
+    console.log('🔵 Contact.address:', contact.address)
+    console.log('🔵 Relatives array:', relatives)
     
     // Validate
     if (!contact.full_name.trim()) {
@@ -82,8 +116,13 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
       return
     }
     
-    console.log('✅ Validation passed, calling onSave')
-    onSave({ contact, relatives })
+    const dataToSend = { contact, relatives }
+    console.log('✅ Validation passed')
+    console.log('✅ Sending this data to onSave:', dataToSend)
+    console.log('✅ Type of onSave:', typeof onSave)
+    
+    onSave(dataToSend)
+    console.log('✅ onSave has been called')
   }
 
   return (
@@ -96,8 +135,8 @@ export default function SkipTraceModal({ leadId, defendantName, onClose, onSave 
               <User className="w-6 h-6 text-amber-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Skip Trace Contact</h2>
-              <p className="text-sm text-slate-400">Add contact information manually</p>
+              <h2 className="text-2xl font-bold text-white">Additional Lead Details</h2>
+              <p className="text-sm text-slate-400">Add or update contact information</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg transition-colors">

@@ -814,6 +814,7 @@ export default function App() {
         <SkipTraceModal
           leadId={selectedLead.id}
           defendantName={selectedTarget?.name || selectedLead.defendants?.split(';')[0]?.trim()}
+          existingContact={leadContacts.find(c => c.full_name === (selectedTarget?.name || selectedLead.defendants?.split(';')[0]?.trim()))}
           onClose={() => {
             setShowSkipTrace(false)
             setSelectedTarget(null)
