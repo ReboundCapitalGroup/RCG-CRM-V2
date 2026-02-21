@@ -134,6 +134,32 @@ export default function App() {
 
   const loadContacts = async (leadId) => {
     console.log('📞 Loading contacts for lead:', leadId)
+    console.log('📞 Lead ID type:', typeof leadId)
+    
+    // DEBUG: Load ALL contacts to see if ANY exist
+    const { data: allContacts } = await supabase
+      .from('contacts')
+      .select('id, lead_id, full_name')
+      .limit(20)
+    console.log('📞 ALL CONTACTS IN DATABASE (first 20):', allContacts)
+    
+    // First check what contacts exist for this lead without the complex join
+    const { data: simpleContacts, error: simpleError } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('lead_id', leadId)
+    
+    console.log('📞 Simple contacts query result:', simpleContacts)
+    console.log('📞 Simple query error:', simpleError)
+    
+    // Try converting lead_id to string just in case
+    const { data: stringContacts } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('lead_id', String(leadId))
+    console.log('📞 String lead_id query result:', stringContacts)
+    
+    // Now try the full query
     const { data: contacts, error } = await supabase
       .from('contacts')
       .select(`
@@ -146,8 +172,8 @@ export default function App() {
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
     
-    console.log('📞 Loaded contacts:', contacts)
-    console.log('📞 Error (if any):', error)
+    console.log('📞 Full contacts query result:', contacts)
+    console.log('📞 Full query error (if any):', error)
     
     return contacts || []
   }
@@ -186,6 +212,10 @@ export default function App() {
       }
       
       console.log('🟢 About to insert contact:', contactData)
+      console.log('🟢 Lead ID we are saving:', selectedLead.id)
+      console.log('🟢 Lead ID type:', typeof selectedLead.id)
+      
+      alert(`About to save contact with lead_id: ${selectedLead.id}`)
       
       // Insert contact without triggering lead updates
       const { data: insertedContact, error: contactError } = await supabase
