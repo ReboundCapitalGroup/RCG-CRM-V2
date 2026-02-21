@@ -733,18 +733,96 @@ export default function App() {
               </div>
             )}
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <User className="w-5 h-5 text-amber-400" />
-                Contacts
-              </h3>
-              <ContactsSection 
-                contacts={leadContacts}
-                lead={selectedLead}
-                onSkipTrace={(selected) => {
-                  setSelectedTarget(selected)
-                  setShowSkipTrace(true)
-                }}
-              />
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <User className="w-5 h-5 text-amber-400" />
+                  Contact Information
+                </h3>
+                <button 
+                  onClick={() => setShowSkipTrace(true)}
+                  className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-sm flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Details
+                </button>
+              </div>
+              
+              {leadContacts && leadContacts.length > 0 ? (
+                <div className="space-y-4">
+                  {leadContacts.map((contact, idx) => (
+                    <div key={idx} className="p-4 bg-slate-900/50 rounded-lg border border-slate-700/30">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="text-white font-semibold text-lg">{contact.full_name}</p>
+                          {contact.age && <p className="text-slate-400 text-sm">Age: {contact.age}</p>}
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setSelectedTarget(contact)
+                            setShowSkipTrace(true)
+                          }}
+                          className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      
+                      {contact.phones && contact.phones.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-slate-400 text-xs mb-1">Phone Numbers:</p>
+                          {contact.phones.map((phone, i) => (
+                            <div key={i} className="flex items-center gap-2 text-emerald-400 text-sm">
+                              <Phone className="w-3 h-3" />
+                              {phone.phone_number} <span className="text-slate-500 text-xs">({phone.phone_type})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {contact.emails && contact.emails.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-slate-400 text-xs mb-1">Email Addresses:</p>
+                          {contact.emails.map((email, i) => (
+                            <div key={i} className="flex items-center gap-2 text-blue-400 text-sm">
+                              <Mail className="w-3 h-3" />
+                              {email.email_address} <span className="text-slate-500 text-xs">({email.email_type})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {contact.addresses && contact.addresses.length > 0 && (
+                        <div>
+                          <p className="text-slate-400 text-xs mb-1">Address:</p>
+                          {contact.addresses.map((addr, i) => (
+                            <div key={i} className="text-white text-sm">
+                              {addr.street_address}<br />
+                              {addr.city}, {addr.state} {addr.zip_code}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {contact.notes && (
+                        <div className="mt-3 pt-3 border-t border-slate-700">
+                          <p className="text-slate-400 text-xs mb-1">Notes:</p>
+                          <p className="text-slate-300 text-sm">{contact.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-slate-400 mb-3">No contact details saved yet</p>
+                  <button 
+                    onClick={() => setShowSkipTrace(true)}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded"
+                  >
+                    Add Contact Details
+                  </button>
+                </div>
+              )}
             </div>
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">Notes</h3>
