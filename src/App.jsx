@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2 } from 'lucide-react'
+import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, Trash2 } from 'lucide-react'
 import { supabase } from './supabase'
 import SkipTraceModal from './SkipTraceModal'
 import ContactsSection from './ContactsSection'
@@ -28,87 +28,6 @@ export default function App() {
     if (user) loadData()
   }, [user])
 
-  useEffect(() => {
-    if (user?.role !== 'admin') {
-      const style = document.createElement('style')
-      style.innerHTML = `
-        * {
-          -webkit-user-select: none !important;
-          -moz-user-select: none !important;
-          -ms-user-select: none !important;
-          user-select: none !important;
-        }
-        input, textarea {
-          -webkit-user-select: text !important;
-          -moz-user-select: text !important;
-          -ms-user-select: text !important;
-          user-select: text !important;
-        }
-      `
-      document.head.appendChild(style)
-      
-      document.addEventListener('contextmenu', (e) => e.preventDefault())
-      document.addEventListener('copy', (e) => e.preventDefault())
-      document.addEventListener('cut', (e) => e.preventDefault())
-      
-      let screenshotAttempts = 0
-      
-      const handleScreenshot = async () => {
-        screenshotAttempts++
-        
-        navigator.clipboard.writeText('')
-        
-        if (screenshotAttempts === 1) {
-          alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
-        } else if (screenshotAttempts === 2) {
-          alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
-        } else if (screenshotAttempts >= 3) {
-          alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
-          
-          await supabase.from('notes').insert([{
-            lead_id: selectedLead?.id || null,
-            text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
-            author: 'SYSTEM',
-            created_at: new Date().toISOString()
-          }])
-        }
-      }
-      
-      document.addEventListener('keyup', (e) => {
-        if (e.key === 'PrintScreen') {
-          handleScreenshot()
-        }
-      })
-      
-      document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
-          e.preventDefault()
-          return false
-        }
-        if (e.ctrlKey && e.key === 'u') {
-          e.preventDefault()
-          return false
-        }
-        if (e.key === 'F12') {
-          e.preventDefault()
-          return false
-        }
-      })
-      
-      setInterval(() => {
-        navigator.clipboard.writeText('')
-      }, 1000)
-      
-      const originalLog = console.log
-      console.log = () => {}
-      
-      return () => {
-        document.head.removeChild(style)
-        console.log = originalLog
-      }
-    }
-  }, [user, selectedLead])
-
   const loadData = async () => {
     setLoading(true)
     try {
@@ -116,7 +35,6 @@ export default function App() {
         supabase.from('leads').select('*').order('created_at', { ascending: false }),
         supabase.from('users').select('*')
       ])
-      
       if (leadsRes.data) setLeads(leadsRes.data)
       if (usersRes.data) setUsers(usersRes.data)
     } catch (err) {
@@ -142,11 +60,11 @@ export default function App() {
       `)
       .eq('lead_id', leadId)
       .order('created_at', { ascending: false })
-    
     return contacts || []
   }
 
   const saveSkipTrace = async (data) => {
+    console.log('💾 Saving skip trace...', data)
     const { contact, relatives } = data
     
     if (!selectedLead || !selectedLead.id) {
@@ -171,45 +89,35 @@ export default function App() {
         notes: contact.notes || null
       }
       
-      const { data: insertedContact, error: contactError } = await supabase
-        .from('contacts')
-        .insert([contactData])
-        .select()
-        .single()
+      console.log('📝 Inserting contact:', contactData)
+      const { data: insertedContact, error: contactError } = await supabase.from('contacts').insert([contactData]).select().single()
       
       if (contactError) {
+        console.error('❌ Error:', contactError)
         alert('Failed to save contact: ' + contactError.message)
         return
       }
       
+      console.log('✅ Contact saved!', insertedContact)
+      
       if (insertedContact) {
-        const phones = contact.phones
-          .filter(p => p.number && p.number.trim())
-          .map((p, i) => ({
-            contact_id: insertedContact.id,
-            phone_number: p.number,
-            phone_type: p.type,
-            is_primary: i === 0,
-            data_source: 'manual'
-          }))
+        const phones = contact.phones.filter(p => p.number && p.number.trim()).map((p, i) => ({
+          contact_id: insertedContact.id,
+          phone_number: p.number,
+          phone_type: p.type,
+          is_primary: i === 0,
+          data_source: 'manual'
+        }))
+        if (phones.length > 0) await supabase.from('phone_numbers').insert(phones)
         
-        if (phones.length > 0) {
-          await supabase.from('phone_numbers').insert(phones)
-        }
-        
-        const emails = contact.emails
-          .filter(e => e.email && e.email.trim())
-          .map((e, i) => ({
-            contact_id: insertedContact.id,
-            email_address: e.email,
-            email_type: e.type,
-            is_primary: i === 0,
-            data_source: 'manual'
-          }))
-        
-        if (emails.length > 0) {
-          await supabase.from('emails').insert(emails)
-        }
+        const emails = contact.emails.filter(e => e.email && e.email.trim()).map((e, i) => ({
+          contact_id: insertedContact.id,
+          email_address: e.email,
+          email_type: e.type,
+          is_primary: i === 0,
+          data_source: 'manual'
+        }))
+        if (emails.length > 0) await supabase.from('emails').insert(emails)
         
         if (contact.address && contact.address.trim()) {
           await supabase.from('addresses').insert([{
@@ -226,7 +134,6 @@ export default function App() {
         
         for (const relative of relatives) {
           if (!relative.name || !relative.name.trim()) continue
-          
           const relData = {
             lead_id: selectedLead.id,
             full_name: relative.name,
@@ -237,13 +144,7 @@ export default function App() {
             skip_traced: false,
             data_source: 'manual'
           }
-          
-          const { data: relContact } = await supabase
-            .from('contacts')
-            .insert([relData])
-            .select()
-            .single()
-          
+          const { data: relContact } = await supabase.from('contacts').insert([relData]).select().single()
           if (relContact) {
             await supabase.from('relatives').insert([{
               contact_id: insertedContact.id,
@@ -251,44 +152,37 @@ export default function App() {
               relationship_type: relative.relationship || 'relative',
               data_source: 'manual'
             }])
-            
-            const relPhones = relative.phones
-              .filter(p => p.number && p.number.trim())
-              .map(p => ({
-                contact_id: relContact.id,
-                phone_number: p.number,
-                phone_type: p.type,
-                data_source: 'manual'
-              }))
-            
-            if (relPhones.length > 0) {
-              await supabase.from('phone_numbers').insert(relPhones)
-            }
+            const relPhones = relative.phones.filter(p => p.number && p.number.trim()).map(p => ({
+              contact_id: relContact.id,
+              phone_number: p.number,
+              phone_type: p.type,
+              data_source: 'manual'
+            }))
+            if (relPhones.length > 0) await supabase.from('phone_numbers').insert(relPhones)
           }
         }
         
-        await supabase
-          .from('leads')
-          .update({
-            skip_trace_status: 'completed',
-            skip_trace_date: new Date().toISOString(),
-            primary_contact_id: insertedContact.id
-          })
-          .eq('id', selectedLead.id)
+        await supabase.from('leads').update({
+          skip_trace_status: 'completed',
+          skip_trace_date: new Date().toISOString(),
+          primary_contact_id: insertedContact.id
+        }).eq('id', selectedLead.id)
         
         const updatedContacts = await loadContacts(selectedLead.id)
         setLeadContacts(updatedContacts)
         setShowSkipTrace(false)
-        
-        alert('Contact saved successfully!')
+        alert('✅ Contact saved successfully!')
       }
     } catch (err) {
+      console.error('❌ Crash:', err)
       alert('Failed to save contact: ' + err.message)
     }
   }
-      .eq('password', form.get('password'))
-      .single()
-    
+
+  const login = async (e) => {
+    e.preventDefault()
+    const form = new FormData(e.target)
+    const { data } = await supabase.from('users').select('*').eq('username', form.get('username')).eq('password', form.get('password')).single()
     if (data) {
       setUser(data)
       setView('dashboard')
@@ -312,12 +206,10 @@ export default function App() {
   const assign = async (id, userId) => {
     await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
     setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
-    if (selectedLead?.id === id) {
-      setSelectedLead({ ...selectedLead, assigned_to: userId })
-    }
+    if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, assigned_to: userId })
   }
 
-  const deleteLead = async (id, caseName) => {
+  const deleteLead = async (id) => {
     try {
       await supabase.from('leads').delete().eq('id', id)
       setLeads(leads.filter(l => l.id !== id))
@@ -329,13 +221,12 @@ export default function App() {
 
   const addNote = async () => {
     if (!note.trim() || !selectedLead) return
-    const newNote = {
+    await supabase.from('notes').insert([{
       lead_id: selectedLead.id,
       text: note,
       author: user.name,
       created_at: new Date().toISOString()
-    }
-    await supabase.from('notes').insert([newNote])
+    }])
     setNote('')
     const notes = await loadNotes(selectedLead.id)
     setSelectedLead({ ...selectedLead, notes })
@@ -362,30 +253,17 @@ export default function App() {
     try {
       const data = JSON.parse(uploadText)
       const formatted = data.map(l => ({
-        id: l.id,
-        case_number: l.caseNumber,
-        county: l.county,
-        lead_type: l.leadType,
-        auction_date: l.auctionDate,
-        property_address: l.propertyAddress,
-        property_city: l.propertyCity,
-        property_zip: l.propertyZip,
-        assessed_value: l.assessedValue,
-        judgment_amount: l.judgmentAmount,
-        sold_amount: l.soldAmount,
-        surplus: l.surplus,
-        defendants: l.defendants,
-        plaintiffs: l.plaintiffs,
-        parcel_id: l.parcelId,
-        case_url: l.caseUrl,
-        zillow_url: l.zillowUrl,
-        property_appraiser_url: l.propertyAppraiserUrl,
-        status: l.status || 'New'
+        id: l.id, case_number: l.caseNumber, county: l.county, lead_type: l.leadType,
+        auction_date: l.auctionDate, property_address: l.propertyAddress, property_city: l.propertyCity,
+        property_zip: l.propertyZip, assessed_value: l.assessedValue, judgment_amount: l.judgmentAmount,
+        sold_amount: l.soldAmount, surplus: l.surplus, defendants: l.defendants, plaintiffs: l.plaintiffs,
+        parcel_id: l.parcelId, case_url: l.caseUrl, zillow_url: l.zillowUrl,
+        property_appraiser_url: l.propertyAppraiserUrl, status: l.status || 'New'
       }))
       await supabase.from('leads').upsert(formatted)
       loadData()
       setUploadText('')
-      alert(\`Uploaded \${data.length} leads!\`)
+      alert(`Uploaded ${data.length} leads!`)
     } catch {
       alert('Invalid JSON')
     }
@@ -395,15 +273,12 @@ export default function App() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = \`leads_\${new Date().toISOString().split('T')[0]}.json\`
+    a.download = `leads_${new Date().toISOString().split('T')[0]}.json`
     a.click()
   }
 
   const viewLead = async (lead) => {
-    const [notes, contacts] = await Promise.all([
-      loadNotes(lead.id),
-      loadContacts(lead.id)
-    ])
+    const [notes, contacts] = await Promise.all([loadNotes(lead.id), loadContacts(lead.id)])
     setSelectedLead({ ...lead, notes })
     setLeadContacts(contacts)
     setView('detail')
@@ -425,10 +300,8 @@ export default function App() {
     }
     if (search) {
       const s = search.toLowerCase()
-      return (l.case_number?.toLowerCase().includes(s)) ||
-             (l.property_address?.toLowerCase().includes(s)) ||
-             (l.county?.toLowerCase().includes(s)) ||
-             (l.defendants?.toLowerCase().includes(s))
+      return (l.case_number?.toLowerCase().includes(s)) || (l.property_address?.toLowerCase().includes(s)) ||
+             (l.county?.toLowerCase().includes(s)) || (l.defendants?.toLowerCase().includes(s))
     }
     return true
   })
@@ -478,7 +351,6 @@ export default function App() {
       <div className="text-amber-400 text-xl">Loading...</div>
     </div>
   )
-
   if (view === 'login') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-2xl p-8">
