@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2, Phone, Mail } from 'lucide-react'
+import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2 } from 'lucide-react'
 import { supabase } from './supabase'
-import SimpleContactForm from './SimpleContactForm'
+import SimpleContactForm from './SkipTraceModal'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -14,21 +14,17 @@ export default function App() {
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadText, setUploadText] = useState('')
-  const [leadContacts, setLeadContacts] = useState([])
+  const [selectedTarget, setSelectedTarget] = useState(null)
   const [selectedLeads, setSelectedLeads] = useState([])
   const [sortBy, setSortBy] = useState('date')
   const [sortOrder, setSortOrder] = useState('desc')
   const [editingNote, setEditingNote] = useState(null)
   const [editNoteText, setEditNoteText] = useState('')
 
-  useEffect(() => {
-    if (user) loadData()
-  }, [user])
-
-  useEffect(() => {
+ useEffect(() => {
     if (user?.role !== 'admin') {
       const style = document.createElement('style')
-      style.innerHTML = \`
+      style.innerHTML = `
         * {
           -webkit-user-select: none !important;
           -moz-user-select: none !important;
@@ -41,29 +37,31 @@ export default function App() {
           -ms-user-select: text !important;
           user-select: text !important;
         }
-      \`
+      `
       document.head.appendChild(style)
       
       document.addEventListener('contextmenu', (e) => e.preventDefault())
       document.addEventListener('copy', (e) => e.preventDefault())
       document.addEventListener('cut', (e) => e.preventDefault())
       
+      // SCARY SCREENSHOT ALERT CODE STARTS HERE
       let screenshotAttempts = 0
       
       const handleScreenshot = async () => {
         screenshotAttempts++
+        
         navigator.clipboard.writeText('')
         
         if (screenshotAttempts === 1) {
-          alert('⚠️ SECURITY ALERT ⚠️\\n\\nScreenshot detected!\\n\\nAdmin has been notified of this activity.\\n\\nYour account: ' + user.name + '\\nTimestamp: ' + new Date().toLocaleString() + '\\n\\nUnauthorized screenshots of company data are strictly prohibited.\\n\\nContinued violations will result in immediate account suspension and legal action.')
+          alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
         } else if (screenshotAttempts === 2) {
-          alert('🚨 FINAL WARNING 🚨\\n\\nSecond screenshot attempt detected!\\n\\nAdmin notification sent with your user details.\\n\\nOne more attempt will trigger automatic account lockout.\\n\\nYou are being monitored.')
+          alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
         } else if (screenshotAttempts >= 3) {
-          alert('🔴 ACCOUNT FLAGGED 🔴\\n\\nMultiple screenshot violations detected.\\n\\nYour account has been flagged for review.\\n\\nAdmin will contact you shortly.\\n\\nAll your activity is being logged.')
+          alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
           
           await supabase.from('notes').insert([{
             lead_id: selectedLead?.id || null,
-            text: \`🚨 SECURITY ALERT: User \${user.name} (\${user.username}) attempted \${screenshotAttempts} screenshots at \${new Date().toLocaleString()}\`,
+            text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
             author: 'SYSTEM',
             created_at: new Date().toISOString()
           }])
@@ -75,6 +73,7 @@ export default function App() {
           handleScreenshot()
         }
       })
+      // SCARY SCREENSHOT ALERT CODE ENDS HERE
       
       document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
@@ -95,8 +94,12 @@ export default function App() {
         navigator.clipboard.writeText('')
       }, 1000)
       
+      const originalLog = console.log
+      console.log = () => {}
+      
       return () => {
         document.head.removeChild(style)
+        console.log = originalLog
       }
     }
   }, [user, selectedLead])
@@ -108,6 +111,7 @@ export default function App() {
         supabase.from('leads').select('*').order('created_at', { ascending: false }),
         supabase.from('users').select('*')
       ])
+      
       if (leadsRes.data) setLeads(leadsRes.data)
       if (usersRes.data) setUsers(usersRes.data)
     } catch (err) {
@@ -122,10 +126,25 @@ export default function App() {
   }
 
   const loadContacts = async (leadId) => {
-    const { data: allContacts, error } = await supabase.from('contacts').select('*')
-    if (error || !allContacts) return []
-    return allContacts.filter(c => String(c.lead_id) === String(leadId))
+    const { data: contacts } = await supabase
+      .from('contacts')
+      .select(`
+        *,
+        phones:phone_numbers(*),
+        emails:emails(*),
+        addresses:addresses(*),
+        relatives:relatives(*, relative:relative_contact_id(*))
+      `)
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false })
+    
+    return contacts || []
   }
+
+  const saveSkipTrace = async (data) => {
+    const { contact, relatives } = data
+    
+    try {
 
   const saveContact = async (formData, editingId) => {
     try {
@@ -170,14 +189,146 @@ export default function App() {
       alert('Error: ' + err.message)
     }
   }
+      const contactData = {
+        lead_id: selectedLead.id,
+        full_name: contact.full_name,
+        first_name: contact.full_name.split(' ')[0],
+        last_name: contact.full_name.split(' ').slice(-1)[0],
+        contact_type: 'defendant',
+        age: contact.age || null,
+        current_address: contact.address || null,
+        current_city: contact.city || null,
+        current_state: contact.state || null,
+        skip_traced: true,
+        skip_trace_date: new Date().toISOString(),
+        data_source: 'manual',
+        notes: contact.notes || null
+      }
+      
+      const { data: insertedContact } = await supabase
+        .from('contacts')
+        .insert([contactData])
+        .select()
+        .single()
+      
+      if (insertedContact) {
+        const phones = contact.phones
+          .filter(p => p.number.trim())
+          .map((p, i) => ({
+            contact_id: insertedContact.id,
+            phone_number: p.number,
+            phone_type: p.type,
+            is_primary: i === 0,
+            data_source: 'manual'
+          }))
+        
+        if (phones.length > 0) {
+          await supabase.from('phone_numbers').insert(phones)
+        }
+        
+        const emails = contact.emails
+          .filter(e => e.email.trim())
+          .map((e, i) => ({
+            contact_id: insertedContact.id,
+            email_address: e.email,
+            email_type: e.type,
+            is_primary: i === 0,
+            data_source: 'manual'
+          }))
+        
+        if (emails.length > 0) {
+          await supabase.from('emails').insert(emails)
+        }
+        
+        if (contact.address) {
+          await supabase.from('addresses').insert([{
+            contact_id: insertedContact.id,
+            street_address: contact.address,
+            city: contact.city,
+            state: contact.state,
+            zip_code: contact.zip,
+            address_type: 'current',
+            is_current: true,
+            data_source: 'manual'
+          }])
+        }
+        
+        for (const relative of relatives) {
+          if (!relative.name.trim()) continue
+          
+          const relData = {
+            lead_id: selectedLead.id,
+            full_name: relative.name,
+            first_name: relative.name.split(' ')[0],
+            last_name: relative.name.split(' ').slice(-1)[0],
+            contact_type: 'relative',
+            relationship: relative.relationship,
+            skip_traced: false,
+            data_source: 'manual'
+          }
+          
+          const { data: relContact } = await supabase
+            .from('contacts')
+            .insert([relData])
+            .select()
+            .single()
+          
+          if (relContact) {
+            await supabase.from('relatives').insert([{
+              contact_id: insertedContact.id,
+              relative_contact_id: relContact.id,
+              relationship_type: relative.relationship || 'relative',
+              data_source: 'manual'
+            }])
+            
+            const relPhones = relative.phones
+              .filter(p => p.number.trim())
+              .map(p => ({
+                contact_id: relContact.id,
+                phone_number: p.number,
+                phone_type: p.type,
+                data_source: 'manual'
+              }))
+            
+            if (relPhones.length > 0) {
+              await supabase.from('phone_numbers').insert(relPhones)
+            }
+          }
+        }
+        
+        await supabase
+          .from('leads')
+          .update({
+            skip_trace_status: 'completed',
+            skip_trace_date: new Date().toISOString(),
+            primary_contact_id: insertedContact.id
+          })
+          .eq('id', selectedLead.id)
+        
+        const updatedContacts = await loadContacts(selectedLead.id)
+        setLeadContacts(updatedContacts)
+        setShowSkipTrace(false)
+        
+        alert('Contact saved successfully!')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Failed to save contact: ' + err.message)
+    }
+  }
 
   const login = async (e) => {
     e.preventDefault()
     const form = new FormData(e.target)
-    const { data } = await supabase.from('users').select('*').eq('username', form.get('username')).eq('password', form.get('password')).single()
+    const { data } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', form.get('username'))
+      .eq('password', form.get('password'))
+      .single()
+    
     if (data) {
       setUser(data)
-      loadData()
       setView('dashboard')
     } else {
       alert('Invalid credentials')
@@ -199,10 +350,12 @@ export default function App() {
   const assign = async (id, userId) => {
     await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
     setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
-    if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, assigned_to: userId })
+    if (selectedLead?.id === id) {
+      setSelectedLead({ ...selectedLead, assigned_to: userId })
+    }
   }
 
-  const deleteLead = async (id) => {
+  const deleteLead = async (id, caseName) => {
     try {
       await supabase.from('leads').delete().eq('id', id)
       setLeads(leads.filter(l => l.id !== id))
@@ -214,12 +367,13 @@ export default function App() {
 
   const addNote = async () => {
     if (!note.trim() || !selectedLead) return
-    await supabase.from('notes').insert([{
+    const newNote = {
       lead_id: selectedLead.id,
       text: note,
       author: user.name,
       created_at: new Date().toISOString()
-    }])
+    }
+    await supabase.from('notes').insert([newNote])
     setNote('')
     const notes = await loadNotes(selectedLead.id)
     setSelectedLead({ ...selectedLead, notes })
@@ -246,17 +400,30 @@ export default function App() {
     try {
       const data = JSON.parse(uploadText)
       const formatted = data.map(l => ({
-        id: l.id, case_number: l.caseNumber, county: l.county, lead_type: l.leadType,
-        auction_date: l.auctionDate, property_address: l.propertyAddress, property_city: l.propertyCity,
-        property_zip: l.propertyZip, assessed_value: l.assessedValue, judgment_amount: l.judgmentAmount,
-        sold_amount: l.soldAmount, surplus: l.surplus, defendants: l.defendants, plaintiffs: l.plaintiffs,
-        parcel_id: l.parcelId, case_url: l.caseUrl, zillow_url: l.zillowUrl,
-        property_appraiser_url: l.propertyAppraiserUrl, status: l.status || 'New'
+        id: l.id,
+        case_number: l.caseNumber,
+        county: l.county,
+        lead_type: l.leadType,
+        auction_date: l.auctionDate,
+        property_address: l.propertyAddress,
+        property_city: l.propertyCity,
+        property_zip: l.propertyZip,
+        assessed_value: l.assessedValue,
+        judgment_amount: l.judgmentAmount,
+        sold_amount: l.soldAmount,
+        surplus: l.surplus,
+        defendants: l.defendants,
+        plaintiffs: l.plaintiffs,
+        parcel_id: l.parcelId,
+        case_url: l.caseUrl,
+        zillow_url: l.zillowUrl,
+        property_appraiser_url: l.propertyAppraiserUrl,
+        status: l.status || 'New'
       }))
       await supabase.from('leads').upsert(formatted)
       loadData()
       setUploadText('')
-      alert(\`Uploaded \${data.length} leads!\`)
+      alert(`Uploaded ${data.length} leads!`)
     } catch {
       alert('Invalid JSON')
     }
@@ -266,12 +433,15 @@ export default function App() {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = \`leads_\${new Date().toISOString().split('T')[0]}.json\`
+    a.download = `leads_${new Date().toISOString().split('T')[0]}.json`
     a.click()
   }
 
   const viewLead = async (lead) => {
-    const [notes, contacts] = await Promise.all([loadNotes(lead.id), loadContacts(lead.id)])
+    const [notes, contacts] = await Promise.all([
+      loadNotes(lead.id),
+      loadContacts(lead.id)
+    ])
     setSelectedLead({ ...lead, notes })
     setLeadContacts(contacts)
     setView('detail')
@@ -293,8 +463,10 @@ export default function App() {
     }
     if (search) {
       const s = search.toLowerCase()
-      return (l.case_number?.toLowerCase().includes(s)) || (l.property_address?.toLowerCase().includes(s)) ||
-             (l.county?.toLowerCase().includes(s)) || (l.defendants?.toLowerCase().includes(s))
+      return (l.case_number?.toLowerCase().includes(s)) ||
+             (l.property_address?.toLowerCase().includes(s)) ||
+             (l.county?.toLowerCase().includes(s)) ||
+             (l.defendants?.toLowerCase().includes(s))
     }
     return true
   })
@@ -344,7 +516,6 @@ export default function App() {
       <div className="text-amber-400 text-xl">Loading...</div>
     </div>
   )
-
 
   if (view === 'login') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -431,7 +602,7 @@ export default function App() {
                 </select>
               </div>
               {selectedLead.surplus && (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
                   <div className="flex items-center justify-between">
                     <span className="text-emerald-400 font-semibold">Surplus</span>
                     <span className="text-2xl font-bold text-emerald-400">{selectedLead.surplus}</span>
@@ -510,17 +681,20 @@ export default function App() {
               </div>
               <div className="flex flex-wrap gap-3">
                 {selectedLead.case_url && (
-                  <a href={selectedLead.case_url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                  <a href={selectedLead.case_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
                     View Case →
                   </a>
                 )}
                 {selectedLead.zillow_url && (
-                  <a href={selectedLead.zillow_url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                  <a href={selectedLead.zillow_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
                     View on Zillow →
                   </a>
                 )}
                 {selectedLead.property_appraiser_url && (
-                  <a href={selectedLead.property_appraiser_url} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                  <a href={selectedLead.property_appraiser_url} target="_blank" rel="noopener noreferrer" 
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
                     Property Appraiser →
                   </a>
                 )}
@@ -538,7 +712,6 @@ export default function App() {
                 </select>
               </div>
             )}
-            
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <User className="w-5 h-5 text-amber-400" />
@@ -551,7 +724,6 @@ export default function App() {
                 onDelete={deleteContact}
               />
             </div>
-            
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">Notes</h3>
               <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
@@ -561,16 +733,47 @@ export default function App() {
                       <span className="text-slate-400 text-xs font-medium">{n.author}</span>
                       <div className="flex gap-2">
                         <span className="text-slate-500 text-xs">{new Date(n.created_at).toLocaleDateString()}</span>
-                        <button onClick={() => { setEditingNote(n.id); setEditNoteText(n.text) }} className="text-amber-400 text-xs hover:underline">Edit</button>
-                        <button onClick={() => deleteNote(n.id)} className="text-red-400 text-xs hover:underline">Delete</button>
+                        <button 
+                          onClick={() => {
+                            setEditingNote(n.id)
+                            setEditNoteText(n.text)
+                          }}
+                          className="text-amber-400 text-xs hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => deleteNote(n.id)}
+                          className="text-red-400 text-xs hover:underline"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                     {editingNote === n.id ? (
                       <div className="space-y-2">
-                        <textarea value={editNoteText} onChange={e => setEditNoteText(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm" rows={2} />
+                        <textarea 
+                          value={editNoteText}
+                          onChange={e => setEditNoteText(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
+                          rows={2}
+                        />
                         <div className="flex gap-2">
-                          <button onClick={() => updateNote(n.id, editNoteText)} className="px-3 py-1 bg-amber-500 text-white rounded text-xs">Save</button>
-                          <button onClick={() => { setEditingNote(null); setEditNoteText('') }} className="px-3 py-1 bg-slate-600 text-white rounded text-xs">Cancel</button>
+                          <button 
+                            onClick={() => updateNote(n.id, editNoteText)}
+                            className="px-3 py-1 bg-amber-500 text-white rounded text-xs"
+                          >
+                            Save
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setEditingNote(null)
+                              setEditNoteText('')
+                            }}
+                            className="px-3 py-1 bg-slate-600 text-white rounded text-xs"
+                          >
+                            Cancel
+                          </button>
                         </div>
                       </div>
                     ) : (
@@ -759,7 +962,10 @@ export default function App() {
                   <button 
                     onClick={() => {
                       if (window.confirm(`Delete ${selectedLeads.length} leads?`)) {
-                        selectedLeads.forEach(id => deleteLead(id))
+                        selectedLeads.forEach(id => {
+                          const lead = leads.find(l => l.id === id)
+                          deleteLead(id, lead?.case_number)
+                        })
                         setSelectedLeads([])
                       }
                     }}
@@ -851,7 +1057,7 @@ export default function App() {
                       {user?.role === 'admin' && (
                         <button onClick={() => {
                           if (window.confirm(`Delete ${l.case_number}?`)) {
-                            deleteLead(l.id)
+                            deleteLead(l.id, l.case_number)
                           }
                         }} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
                           Del
