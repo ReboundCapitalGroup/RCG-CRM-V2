@@ -133,7 +133,6 @@ export default function App() {
   }
 
   const loadContacts = async (leadId) => {
-  const loadContacts = async (leadId) => {
     // WORKAROUND: Load all contacts and filter client-side
     const { data: allContacts, error } = await supabase
       .from('contacts')
