@@ -133,50 +133,31 @@ export default function App() {
   }
 
   const loadContacts = async (leadId) => {
-    console.log('📞 Loading contacts for lead:', leadId)
-    console.log('📞 Lead ID type:', typeof leadId)
-    
-    // DEBUG: Load ALL contacts to see if ANY exist
-    const { data: allContacts } = await supabase
-      .from('contacts')
-      .select('id, lead_id, full_name')
-      .limit(20)
-    console.log('📞 ALL CONTACTS IN DATABASE (first 20):', allContacts)
-    
-    // First check what contacts exist for this lead without the complex join
-    const { data: simpleContacts, error: simpleError } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('lead_id', leadId)
-    
-    console.log('📞 Simple contacts query result:', simpleContacts)
-    console.log('📞 Simple query error:', simpleError)
-    
-    // Try converting lead_id to string just in case
-    const { data: stringContacts } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('lead_id', String(leadId))
-    console.log('📞 String lead_id query result:', stringContacts)
-    
-    // Now try the full query
-    const { data: contacts, error } = await supabase
+  const loadContacts = async (leadId) => {
+    // WORKAROUND: Load all contacts and filter client-side
+    const { data: allContacts, error } = await supabase
       .from('contacts')
       .select(`
         *,
         phones:phone_numbers(*),
         emails:emails(*),
-        addresses:addresses(*),
-        relatives:relatives(*, relative:relative_contact_id(*))
+        addresses:addresses(*)
       `)
-      .eq('lead_id', leadId)
-      .order('created_at', { ascending: false })
     
-    console.log('📞 Full contacts query result:', contacts)
-    console.log('📞 Full query error (if any):', error)
+    if (error || !allContacts) {
+      console.error('Error loading contacts:', error)
+      return []
+    }
     
-    return contacts || []
+    // Filter using flexible matching
+    const filtered = allContacts.filter(c => 
+      String(c.lead_id) === String(leadId)
+    )
+    
+    console.log(`Found ${filtered.length} contacts for lead ${leadId}`)
+    return filtered
   }
+
 
   const saveSkipTrace = async (data) => {
     console.log('🟢 saveSkipTrace called!')
@@ -784,9 +765,6 @@ export default function App() {
               
               {/* DEBUG INFO */}
               <div className="mb-4 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-400">
-                DEBUG: leadContacts count = {leadContacts?.length || 0}
-                {leadContacts && leadContacts.length > 0 && (
-                  <div>First contact: {leadContacts[0]?.full_name}</div>
                 )}
               </div>
               
