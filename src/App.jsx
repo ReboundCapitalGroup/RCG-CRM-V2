@@ -668,26 +668,7 @@ export default function App() {
       </div>
     </div>
   )
-```
 
-**Count the closing divs - you need FIVE `</div>` tags, not FOUR!**
-
-Before:
-```
-            </div>     ← closes Notes card
-          </div>       ← closes right sidebar
-        </div>         ← closes grid
-    </div>             ← closes outer wrapper (MISSING ONE HERE!)
-  )
-```
-
-After:
-```
-            </div>     ← closes Notes card
-          </div>       ← closes right sidebar  
-        </div>         ← closes grid
-      </div>           ← closes max-w-7xl wrapper (THIS ONE WAS MISSING!)
-    </div>             ← closes min-h-screen
   )
 
   return (
