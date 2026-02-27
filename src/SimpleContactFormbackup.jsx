@@ -58,21 +58,13 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
   }
 
   const handleSave = async () => {
-    // Validate at least one name field is filled
     if (!formData.first_name.trim() && !formData.last_name.trim()) {
       alert('Please enter at least a first or last name')
       return
     }
     
-    try {
-      // Call the onSave function from parent and wait for it to complete
-      await onSave(formData, editingId)
-      // Only reset form if save was successful
-      resetForm()
-    } catch (error) {
-      // Error is already handled in parent component
-      console.error('Error in handleSave:', error)
-    }
+    await onSave(formData, editingId)
+    resetForm()
   }
 
   return (
@@ -84,11 +76,7 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
             <h4 className="text-white font-semibold">
               {editingId ? 'Edit Contact' : 'Add New Contact'}
             </h4>
-            <button 
-              onClick={resetForm} 
-              className="text-slate-400 hover:text-white"
-              type="button"
-            >
+            <button onClick={resetForm} className="text-slate-400 hover:text-white">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -101,7 +89,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.first_name}
                 onChange={e => setFormData({...formData, first_name: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="John"
               />
             </div>
 
@@ -112,7 +99,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.last_name}
                 onChange={e => setFormData({...formData, last_name: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="Doe"
               />
             </div>
 
@@ -133,7 +119,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.phone}
                 onChange={e => setFormData({...formData, phone: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="(555) 123-4567"
               />
             </div>
 
@@ -144,7 +129,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.secondary_phone}
                 onChange={e => setFormData({...formData, secondary_phone: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="(555) 987-6543"
               />
             </div>
 
@@ -155,7 +139,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.email}
                 onChange={e => setFormData({...formData, email: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="john.doe@email.com"
               />
             </div>
 
@@ -166,7 +149,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.address}
                 onChange={e => setFormData({...formData, address: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="123 Main St"
               />
             </div>
 
@@ -177,7 +159,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.city}
                 onChange={e => setFormData({...formData, city: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="Miami"
               />
             </div>
 
@@ -189,7 +170,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 onChange={e => setFormData({...formData, state: e.target.value})}
                 maxLength={2}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm uppercase"
-                placeholder="FL"
               />
             </div>
 
@@ -200,7 +180,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 value={formData.zip}
                 onChange={e => setFormData({...formData, zip: e.target.value})}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                placeholder="33101"
               />
             </div>
 
@@ -222,7 +201,6 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 onChange={e => setFormData({...formData, additional_info: e.target.value})}
                 rows={2}
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm resize-none"
-                placeholder="Any additional notes about this contact..."
               />
             </div>
           </div>
@@ -230,15 +208,13 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
           <div className="flex gap-2 mt-4">
             <button
               onClick={handleSave}
-              className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded font-semibold transition-colors"
-              type="button"
+              className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded font-semibold"
             >
               {editingId ? 'Update Contact' : 'Save Contact'}
             </button>
             <button
               onClick={resetForm}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded transition-colors"
-              type="button"
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded"
             >
               Cancel
             </button>
@@ -247,8 +223,7 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
       ) : (
         <button
           onClick={() => setIsAdding(true)}
-          className="w-full px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-lg flex items-center justify-center gap-2 transition-colors"
-          type="button"
+          className="w-full px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-lg flex items-center justify-center gap-2"
         >
           <Plus className="w-5 h-5" />
           Add Contact Information
@@ -273,9 +248,7 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(contact)}
-                    className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded transition-colors"
-                    type="button"
-                    title="Edit contact"
+                    className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
@@ -285,9 +258,7 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                         onDelete(contact.id)
                       }
                     }}
-                    className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors"
-                    type="button"
-                    title="Delete contact"
+                    className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -310,10 +281,9 @@ export default function SimpleContactForm({ leadId, contacts, onSave, onDelete }
                     <span className="text-slate-500">Email:</span> {contact.email}
                   </div>
                 )}
-                {(contact.address || contact.city || contact.state || contact.zip) && (
+                {contact.address && (
                   <div className="text-slate-300 col-span-2">
-                    <span className="text-slate-500">Address:</span>{' '}
-                    {contact.address}
+                    <span className="text-slate-500">Address:</span> {contact.address}
                     {contact.city && `, ${contact.city}`}
                     {contact.state && `, ${contact.state}`}
                     {contact.zip && ` ${contact.zip}`}

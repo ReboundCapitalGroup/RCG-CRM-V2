@@ -27,7 +27,7 @@ export default function App() {
     if (user) loadData()
   }, [user])
 
-  useEffect(() => {
+ useEffect(() => {
     if (user?.role !== 'admin') {
       const style = document.createElement('style')
       style.innerHTML = `
@@ -50,6 +50,7 @@ export default function App() {
       document.addEventListener('copy', (e) => e.preventDefault())
       document.addEventListener('cut', (e) => e.preventDefault())
       
+      // SCARY SCREENSHOT ALERT CODE STARTS HERE
       let screenshotAttempts = 0
       
       const handleScreenshot = async () => {
@@ -78,6 +79,7 @@ export default function App() {
           handleScreenshot()
         }
       })
+      // SCARY SCREENSHOT ALERT CODE ENDS HERE
       
       document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
@@ -119,159 +121,80 @@ export default function App() {
       if (leadsRes.data) setLeads(leadsRes.data)
       if (usersRes.data) setUsers(usersRes.data)
     } catch (err) {
-      console.error('Error loading data:', err)
+      console.error(err)
     }
     setLoading(false)
   }
 
   const loadNotes = async (leadId) => {
-    try {
-      const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('lead_id', leadId)
-        .order('created_at', { ascending: false })
-      
-      if (error) {
-        console.error('Error loading notes:', error)
-        return []
-      }
-      return data || []
-    } catch (err) {
-      console.error('Error loading notes:', err)
-      return []
-    }
+    const { data } = await supabase.from('notes').select('*').eq('lead_id', leadId).order('created_at', { ascending: false })
+    return data || []
   }
 
   const loadContacts = async (leadId) => {
-    try {
-      console.log('Loading contacts for lead:', leadId)
-      
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('lead_id', String(leadId))
-        .order('created_at', { ascending: false })
-      
-      if (error) {
-        console.error('Error loading contacts:', error)
-        return []
-      }
-      
-      console.log('Contacts loaded:', data)
-      return data || []
-    } catch (err) {
-      console.error('Error loading contacts:', err)
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('lead_id', String(leadId))
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('Error loading contacts:', error)
       return []
     }
+    
+    return data || []
   }
 
   const saveContact = async (formData, editingId) => {
     try {
-      console.log('Starting saveContact with:', { formData, editingId, selectedLeadId: selectedLead?.id })
-
-      // Validate
-      if (!selectedLead?.id) {
-        throw new Error('No lead selected - please select a lead first')
-      }
-
-      if (!formData.first_name?.trim() && !formData.last_name?.trim()) {
-        throw new Error('Please enter at least a first or last name')
-      }
-
-      // Clean and prepare data
       const contactData = {
         lead_id: String(selectedLead.id),
-        first_name: formData.first_name?.trim() || null,
-        last_name: formData.last_name?.trim() || null,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
         date_of_birth: formData.date_of_birth || null,
-        phone: formData.phone?.trim() || null,
-        secondary_phone: formData.secondary_phone?.trim() || null,
-        email: formData.email?.trim() || null,
-        address: formData.address?.trim() || null,
-        city: formData.city?.trim() || null,
-        state: formData.state?.trim()?.toUpperCase() || null,
-        zip: formData.zip?.trim() || null,
-        social_media: formData.social_media?.trim() || null,
-        additional_info: formData.additional_info?.trim() || null,
-        updated_at: new Date().toISOString()
+        phone: formData.phone || null,
+        secondary_phone: formData.secondary_phone || null,
+        email: formData.email || null,
+        address: formData.address || null,
+        city: formData.city || null,
+        state: formData.state || null,
+        zip: formData.zip || null,
+        social_media: formData.social_media || null,
+        additional_info: formData.additional_info || null
       }
-
-      console.log('Prepared contact data:', contactData)
-
-      let result
 
       if (editingId) {
-        // Update existing contact
-        console.log('Updating contact:', editingId)
-        result = await supabase
-          .from('contacts')
-          .update(contactData)
-          .eq('id', editingId)
-          .select()
+        await supabase.from('contacts').update(contactData).eq('id', editingId)
+        alert('✅ Contact updated!')
       } else {
-        // Insert new contact
-        console.log('Inserting new contact')
-        result = await supabase
-          .from('contacts')
-          .insert([{
-            ...contactData,
-            created_at: new Date().toISOString()
-          }])
-          .select()
+        await supabase.from('contacts').insert([contactData])
+        alert('✅ Contact saved!')
       }
 
-      console.log('Supabase response:', result)
-
-      if (result.error) {
-        console.error('Supabase error details:', result.error)
-        throw new Error(result.error.message)
-      }
-
-      console.log('Success! Saved data:', result.data)
-
-      // Refresh contacts list
-      const updatedContacts = await loadContacts(selectedLead.id)
-      setLeadContacts(updatedContacts)
-
-      // Show success message
-      alert(editingId ? '✅ Contact updated successfully!' : '✅ Contact saved successfully!')
-      
-      return result.data
-
+      const updated = await loadContacts(selectedLead.id)
+      setLeadContacts(updated)
     } catch (err) {
-      console.error('Error in saveContact:', err)
-      alert(`Error: ${err.message}`)
-      return null
+      alert('Error: ' + err.message)
     }
   }
 
   const deleteContact = async (contactId) => {
     try {
-      console.log('Deleting contact:', contactId)
-      
-      const { error } = await supabase
-        .from('contacts')
-        .delete()
-        .eq('id', contactId)
-      
-      if (error) throw error
-      
-      // Refresh contacts list
+      await supabase.from('contacts').delete().eq('id', contactId)
       const updated = await loadContacts(selectedLead.id)
       setLeadContacts(updated)
-      
       alert('✅ Contact deleted!')
     } catch (err) {
-      console.error('Error deleting contact:', err)
       alert('Error: ' + err.message)
     }
+  
   }
 
   const login = async (e) => {
     e.preventDefault()
     const form = new FormData(e.target)
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('users')
       .select('*')
       .eq('username', form.get('username'))
@@ -291,130 +214,64 @@ export default function App() {
     setUser(null)
     setView('login')
     setSelectedLead(null)
-    setLeadContacts([])
   }
 
   const updateStatus = async (id, status) => {
-    try {
-      const { error } = await supabase
-        .from('leads')
-        .update({ status, last_modified: new Date().toISOString() })
-        .eq('id', id)
-      
-      if (error) throw error
-      
-      setLeads(leads.map(l => l.id === id ? { ...l, status } : l))
-      if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, status })
-    } catch (err) {
-      console.error('Error updating status:', err)
-      alert('Failed to update status')
-    }
+    await supabase.from('leads').update({ status, last_modified: new Date().toISOString() }).eq('id', id)
+    setLeads(leads.map(l => l.id === id ? { ...l, status } : l))
+    if (selectedLead?.id === id) setSelectedLead({ ...selectedLead, status })
   }
 
   const assign = async (id, userId) => {
-    try {
-      const { error } = await supabase
-        .from('leads')
-        .update({ assigned_to: userId, last_modified: new Date().toISOString() })
-        .eq('id', id)
-      
-      if (error) throw error
-      
-      setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
-      if (selectedLead?.id === id) {
-        setSelectedLead({ ...selectedLead, assigned_to: userId })
-      }
-    } catch (err) {
-      console.error('Error assigning lead:', err)
-      alert('Failed to assign lead')
+    await supabase.from('leads').update({ assigned_to: userId, last_modified: new Date().toISOString() }).eq('id', id)
+    setLeads(leads.map(l => l.id === id ? { ...l, assigned_to: userId } : l))
+    if (selectedLead?.id === id) {
+      setSelectedLead({ ...selectedLead, assigned_to: userId })
     }
   }
 
-  const deleteLead = async (id) => {
+  const deleteLead = async (id, caseName) => {
     try {
-      const { error } = await supabase
-        .from('leads')
-        .delete()
-        .eq('id', id)
-      
-      if (error) throw error
-      
+      await supabase.from('leads').delete().eq('id', id)
       setLeads(leads.filter(l => l.id !== id))
     } catch (err) {
-      console.error('Error deleting lead:', err)
+      console.error(err)
       alert('Failed to delete lead')
     }
   }
 
   const addNote = async () => {
     if (!note.trim() || !selectedLead) return
-    
-    try {
-      const newNote = {
-        lead_id: selectedLead.id,
-        text: note,
-        author: user.name,
-        created_at: new Date().toISOString()
-      }
-      
-      const { error } = await supabase
-        .from('notes')
-        .insert([newNote])
-      
-      if (error) throw error
-      
-      setNote('')
-      const notes = await loadNotes(selectedLead.id)
-      setSelectedLead({ ...selectedLead, notes })
-    } catch (err) {
-      console.error('Error adding note:', err)
-      alert('Failed to add note')
+    const newNote = {
+      lead_id: selectedLead.id,
+      text: note,
+      author: user.name,
+      created_at: new Date().toISOString()
     }
+    await supabase.from('notes').insert([newNote])
+    setNote('')
+    const notes = await loadNotes(selectedLead.id)
+    setSelectedLead({ ...selectedLead, notes })
   }
 
   const updateNote = async (noteId, newText) => {
     if (!newText.trim()) return
-    
-    try {
-      const { error } = await supabase
-        .from('notes')
-        .update({ text: newText })
-        .eq('id', noteId)
-      
-      if (error) throw error
-      
-      const notes = await loadNotes(selectedLead.id)
-      setSelectedLead({ ...selectedLead, notes })
-      setEditingNote(null)
-      setEditNoteText('')
-    } catch (err) {
-      console.error('Error updating note:', err)
-      alert('Failed to update note')
-    }
+    await supabase.from('notes').update({ text: newText }).eq('id', noteId)
+    const notes = await loadNotes(selectedLead.id)
+    setSelectedLead({ ...selectedLead, notes })
+    setEditingNote(null)
+    setEditNoteText('')
   }
 
   const deleteNote = async (noteId) => {
     if (!window.confirm('Delete this note?')) return
-    
-    try {
-      const { error } = await supabase
-        .from('notes')
-        .delete()
-        .eq('id', noteId)
-      
-      if (error) throw error
-      
-      const notes = await loadNotes(selectedLead.id)
-      setSelectedLead({ ...selectedLead, notes })
-    } catch (err) {
-      console.error('Error deleting note:', err)
-      alert('Failed to delete note')
-    }
+    await supabase.from('notes').delete().eq('id', noteId)
+    const notes = await loadNotes(selectedLead.id)
+    setSelectedLead({ ...selectedLead, notes })
   }
 
   const uploadLeads = async () => {
     if (!uploadText.trim()) return alert('Paste JSON data')
-    
     try {
       const data = JSON.parse(uploadText)
       const formatted = data.map(l => ({
@@ -438,19 +295,12 @@ export default function App() {
         property_appraiser_url: l.propertyAppraiserUrl,
         status: l.status || 'New'
       }))
-      
-      const { error } = await supabase
-        .from('leads')
-        .upsert(formatted)
-      
-      if (error) throw error
-      
+      await supabase.from('leads').upsert(formatted)
       loadData()
       setUploadText('')
       alert(`Uploaded ${data.length} leads!`)
-    } catch (err) {
-      console.error('Error uploading leads:', err)
-      alert('Invalid JSON or upload failed')
+    } catch {
+      alert('Invalid JSON')
     }
   }
 
@@ -463,24 +313,17 @@ export default function App() {
   }
 
   const viewLead = async (lead) => {
-    console.log('Viewing lead:', lead.id)
-    try {
-      const [notes, contacts] = await Promise.all([
-        loadNotes(lead.id),
-        loadContacts(lead.id)
-      ])
-      
-      console.log('Setting leadContacts to:', contacts)
-      setSelectedLead({ ...lead, notes })
-      setLeadContacts(contacts)
-      setView('detail')
-    } catch (err) {
-      console.error('Error viewing lead:', err)
-      alert('Error loading lead details')
-    }
+    console.log('👁️ Viewing lead:', lead.id)
+    const [notes, contacts] = await Promise.all([
+      loadNotes(lead.id),
+      loadContacts(lead.id)
+    ])
+    console.log('👁️ Setting leadContacts to:', contacts)
+    setSelectedLead({ ...lead, notes })
+    setLeadContacts(contacts)
+    setView('detail')
   }
 
-  // Filter leads based on user role and filters
   const filtered = leads.filter(l => {
     if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
     if (filters.status !== 'all' && l.status !== filters.status) return false
@@ -505,7 +348,6 @@ export default function App() {
     return true
   })
 
-  // Sort filtered leads
   const sortedFiltered = [...filtered].sort((a, b) => {
     if (sortBy === 'date') {
       const dateA = a.auction_date ? new Date(a.auction_date) : new Date(0)
@@ -513,14 +355,13 @@ export default function App() {
       return sortOrder === 'desc' ? dateB - dateA : dateA - dateB
     }
     if (sortBy === 'surplus') {
-      const surpA = parseFloat((a.surplus || '0').replace(/[$,]/g, '')) || 0
-      const surpB = parseFloat((b.surplus || '0').replace(/[$,]/g, '')) || 0
+      const surpA = parseFloat((a.surplus || '0').replace(/[$,]/g, ''))
+      const surpB = parseFloat((b.surplus || '0').replace(/[$,]/g, ''))
       return sortOrder === 'desc' ? surpB - surpA : surpA - surpB
     }
     return 0
   })
 
-  // Calculate stats
   const stats = {
     total: leads.length,
     new: leads.filter(l => l.status === 'New').length,
@@ -530,14 +371,13 @@ export default function App() {
     future: leads.filter(l => l.lead_type === 'Future Auction').length,
     totalSurplus: leads.reduce((sum, l) => {
       if (l.surplus && l.status !== 'Dead') {
-        const amount = parseFloat(l.surplus.replace(/[$,]/g, '')) || 0
+        const amount = parseFloat(l.surplus.replace(/[$,]/g, ''))
         return sum + (amount > 0 ? amount : 0)
       }
       return sum
     }, 0)
   }
 
-  // Get unique counties and states
   const counties = [...new Set(leads.map(l => l.county))].filter(Boolean).sort()
   const states = [...new Set(leads.map(l => {
     const county = l.county || ''
@@ -548,14 +388,12 @@ export default function App() {
     return null
   }))].filter(Boolean).sort()
 
-  // Loading state
   if (loading) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center">
       <div className="text-amber-400 text-xl">Loading...</div>
     </div>
   )
 
-  // Login view
   if (view === 'login') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-2xl p-8">
@@ -565,28 +403,14 @@ export default function App() {
           <p className="text-slate-400">Lead Management System</p>
         </div>
         <form onSubmit={login} className="space-y-4">
-          <input 
-            name="username" 
-            placeholder="Username" 
-            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500" 
-            required 
-          />
-          <input 
-            name="password" 
-            type="password" 
-            placeholder="Password" 
-            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500" 
-            required 
-          />
-          <button className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-3 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700">
-            Sign In
-          </button>
+          <input name="username" placeholder="Username" className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500" required />
+          <input name="password" type="password" placeholder="Password" className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500" required />
+          <button className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-3 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700">Sign In</button>
         </form>
       </div>
     </div>
   )
 
-  // Admin view
   if (view === 'admin') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
@@ -603,18 +427,8 @@ export default function App() {
           <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <Upload className="w-5 h-5 text-amber-400" /> Upload Leads
           </h2>
-          <textarea 
-            value={uploadText} 
-            onChange={e => setUploadText(e.target.value)} 
-            placeholder='Paste JSON: [{"id":"LEAD_00001",...}]' 
-            className="w-full h-64 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-amber-500" 
-          />
-          <button 
-            onClick={uploadLeads} 
-            className="mt-4 px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700"
-          >
-            Upload
-          </button>
+          <textarea value={uploadText} onChange={e => setUploadText(e.target.value)} placeholder='Paste JSON: [{"id":"LEAD_00001",...}]' className="w-full h-64 px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-amber-500" />
+          <button onClick={uploadLeads} className="mt-4 px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700">Upload</button>
         </div>
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
           <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
@@ -638,7 +452,6 @@ export default function App() {
     </div>
   )
 
-  // Detail view
   if (view === 'detail' && selectedLead) return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 px-6 py-4">
@@ -661,16 +474,8 @@ export default function App() {
                   <h1 className="text-3xl font-bold text-white mb-2">{selectedLead.property_address}</h1>
                   <p className="text-slate-400">{selectedLead.county} • {selectedLead.case_number}</p>
                 </div>
-                <select 
-                  value={selectedLead.status} 
-                  onChange={e => updateStatus(selectedLead.id, e.target.value)} 
-                  className="px-4 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg"
-                >
-                  <option>New</option>
-                  <option>Contacted</option>
-                  <option>Interested</option>
-                  <option>Not Interested</option>
-                  <option>Dead</option>
+                <select value={selectedLead.status} onChange={e => updateStatus(selectedLead.id, e.target.value)} className="px-4 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg">
+                  <option>New</option><option>Contacted</option><option>Interested</option><option>Not Interested</option><option>Dead</option>
                 </select>
               </div>
               {selectedLead.surplus && (
@@ -778,20 +583,14 @@ export default function App() {
             {user?.role === 'admin' && (
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Assign</h3>
-                <select 
-                  value={selectedLead.assigned_to || ''} 
-                  onChange={e => assign(selectedLead.id, e.target.value || null)} 
-                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg"
-                >
+                <select value={selectedLead.assigned_to || ''} onChange={e => assign(selectedLead.id, e.target.value || null)} className="w-full px-4 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg">
                   <option value="">Unassigned</option>
-                  {users.filter(u => u.role === 'user').map(u => 
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  )}
+                  {users.filter(u => u.role === 'user').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
             )}
             
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <User className="w-5 h-5 text-amber-400" />
                 Contact Information
@@ -803,7 +602,6 @@ export default function App() {
                 onDelete={deleteContact}
               />
             </div>
-
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <h3 className="text-lg font-bold text-white mb-4">Notes</h3>
               <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
@@ -862,27 +660,15 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <textarea 
-                value={note} 
-                onChange={e => setNote(e.target.value)} 
-                placeholder="Add note..." 
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white resize-none focus:outline-none focus:border-amber-500" 
-                rows={3} 
-              />
-              <button 
-                onClick={addNote} 
-                className="mt-2 w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700"
-              >
-                Add Note
-              </button>
-            </div>
+              <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add note..." className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white resize-none focus:outline-none focus:border-amber-500" rows={3} />
+              <button onClick={addNote} className="mt-2 w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700">Add Note</button>
+  </div>
           </div>
         </div>
       </div>
     </div>
   )
 
-  // Dashboard view
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="bg-slate-800/50 border-b border-slate-700/50 sticky top-0 z-50 px-6 py-4">
@@ -897,16 +683,10 @@ export default function App() {
           <div className="flex items-center gap-4">
             {user?.role === 'admin' && (
               <>
-                <button 
-                  onClick={() => setView('admin')} 
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center gap-2"
-                >
+                <button onClick={() => setView('admin')} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center gap-2">
                   <UsersIcon className="w-4 h-4" /> Admin
                 </button>
-                <button 
-                  onClick={exportData} 
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center gap-2"
-                >
+                <button onClick={exportData} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center gap-2">
                   <Download className="w-4 h-4" /> Export
                 </button>
               </>
@@ -925,7 +705,6 @@ export default function App() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
@@ -982,7 +761,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sort Controls */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-slate-400 text-sm">Sort by:</span>
           <button 
@@ -1013,59 +791,32 @@ export default function App() {
           </button>
         </div>
 
-        {/* Filters */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input 
-                value={search} 
-                onChange={e => setSearch(e.target.value)} 
-                placeholder="Search leads..." 
-                className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500" 
-              />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search leads..." className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500" />
             </div>
-            <select 
-              value={filters.status} 
-              onChange={e => setFilters({ ...filters, status: e.target.value })} 
-              className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg"
-            >
+            <select value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })} className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg">
               <option value="all">All Statuses</option>
-              <option>New</option>
-              <option>Contacted</option>
-              <option>Interested</option>
-              <option>Not Interested</option>
-              <option>Dead</option>
+              <option>New</option><option>Contacted</option><option>Interested</option><option>Not Interested</option><option>Dead</option>
             </select>
-            <select 
-              value={filters.type} 
-              onChange={e => setFilters({ ...filters, type: e.target.value })} 
-              className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg"
-            >
+            <select value={filters.type} onChange={e => setFilters({ ...filters, type: e.target.value })} className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg">
               <option value="all">All Types</option>
               <option>Surplus</option>
               <option>Future Auction</option>
             </select>
-            <select 
-              value={filters.state} 
-              onChange={e => setFilters({ ...filters, state: e.target.value })} 
-              className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg"
-            >
+            <select value={filters.state} onChange={e => setFilters({ ...filters, state: e.target.value })} className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg">
               <option value="all">All States</option>
               {states.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <select 
-              value={filters.county} 
-              onChange={e => setFilters({ ...filters, county: e.target.value })} 
-              className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg"
-            >
+            <select value={filters.county} onChange={e => setFilters({ ...filters, county: e.target.value })} className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg">
               <option value="all">All Counties</option>
               {counties.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
         </div>
 
-        {/* Bulk Actions */}
         {selectedLeads.length > 0 && (
           <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4 mb-4 flex items-center justify-between">
             <span className="text-white font-medium">{selectedLeads.length} leads selected</span>
@@ -1089,7 +840,10 @@ export default function App() {
                   <button 
                     onClick={() => {
                       if (window.confirm(`Delete ${selectedLeads.length} leads?`)) {
-                        selectedLeads.forEach(id => deleteLead(id))
+                        selectedLeads.forEach(id => {
+                          const lead = leads.find(l => l.id === id)
+                          deleteLead(id, lead?.case_number)
+                        })
                         setSelectedLeads([])
                       }
                     }}
@@ -1109,7 +863,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Leads Table */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
@@ -1163,9 +916,7 @@ export default function App() {
                       {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
                     </span>
                   </td>
-                  <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>
-                    {l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}
-                  </td>
+                  <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>{l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}</td>
                   <td className="px-2 py-2 text-emerald-400 font-semibold text-xs truncate" style={{width: '90px'}}>{l.surplus || '—'}</td>
                   <td className="px-2 py-2" style={{width: '75px'}}>
                     <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${
@@ -1174,27 +925,19 @@ export default function App() {
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
                       l.status === 'Not Interested' ? 'bg-slate-500/20 text-slate-400' :
                       'bg-red-500/20 text-red-400'
-                    }`}>
-                      {l.status === 'Not Interested' ? 'NoInt' : l.status}
-                    </span>
+                    }`}>{l.status === 'Not Interested' ? 'NoInt' : l.status}</span>
                   </td>
                   <td className="px-2 py-2" style={{width: '120px'}}>
                     <div className="flex items-center gap-1">
-                      <button 
-                        onClick={() => viewLead(l)} 
-                        className="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs"
-                      >
+                      <button onClick={() => viewLead(l)} className="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs">
                         <Eye className="w-3 h-3" /> View
                       </button>
                       {user?.role === 'admin' && (
-                        <button 
-                          onClick={() => {
-                            if (window.confirm(`Delete ${l.case_number}?`)) {
-                              deleteLead(l.id)
-                            }
-                          }} 
-                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
-                        >
+                        <button onClick={() => {
+                          if (window.confirm(`Delete ${l.case_number}?`)) {
+                            deleteLead(l.id, l.case_number)
+                          }
+                        }} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
                           Del
                         </button>
                       )}
@@ -1204,9 +947,7 @@ export default function App() {
               ))}
             </tbody>
           </table>
-          {sortedFiltered.length === 0 && (
-            <div className="text-center py-12 text-slate-400">No leads found</div>
-          )}
+          {sortedFiltered.length === 0 && <div className="text-center py-12 text-slate-400">No leads found</div>}
         </div>
       </div>
     </div>
