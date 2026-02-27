@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2 } from 'lucide-react'
+import { Search, LogOut, Eye, Plus, Upload, Download, Users as UsersIcon, FileText, DollarSign, Calendar, TrendingUp, MapPin, User, ArrowUpDown, Trash2, Phone, Mail } from 'lucide-react'
 import { supabase } from './supabase'
-import SimpleContactForm from './SkipTraceModal'
+import SimpleContactForm from './SimpleContactForm'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -14,12 +14,18 @@ export default function App() {
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadText, setUploadText] = useState('')
-  const [selectedTarget, setSelectedTarget] = useState(null)
+  
+  const [leadContacts, setLeadContacts] = useState([])
   const [selectedLeads, setSelectedLeads] = useState([])
   const [sortBy, setSortBy] = useState('date')
   const [sortOrder, setSortOrder] = useState('desc')
   const [editingNote, setEditingNote] = useState(null)
   const [editNoteText, setEditNoteText] = useState('')
+
+
+  useEffect(() => {
+    if (user) loadData()
+  }, [user])
 
  useEffect(() => {
     if (user?.role !== 'admin') {
@@ -126,25 +132,19 @@ export default function App() {
   }
 
   const loadContacts = async (leadId) => {
-    const { data: contacts } = await supabase
+    const { data, error } = await supabase
       .from('contacts')
-      .select(`
-        *,
-        phones:phone_numbers(*),
-        emails:emails(*),
-        addresses:addresses(*),
-        relatives:relatives(*, relative:relative_contact_id(*))
-      `)
-      .eq('lead_id', leadId)
+      .select('*')
+      .eq('lead_id', String(leadId))
       .order('created_at', { ascending: false })
     
-    return contacts || []
-  }
-
-  const saveSkipTrace = async (data) => {
-    const { contact, relatives } = data
+    if (error) {
+      console.error('Error loading contacts:', error)
+      return []
+    }
     
-    try {
+    return data || []
+  }
 
   const saveContact = async (formData, editingId) => {
     try {
@@ -188,133 +188,7 @@ export default function App() {
     } catch (err) {
       alert('Error: ' + err.message)
     }
-  }
-      const contactData = {
-        lead_id: selectedLead.id,
-        full_name: contact.full_name,
-        first_name: contact.full_name.split(' ')[0],
-        last_name: contact.full_name.split(' ').slice(-1)[0],
-        contact_type: 'defendant',
-        age: contact.age || null,
-        current_address: contact.address || null,
-        current_city: contact.city || null,
-        current_state: contact.state || null,
-        skip_traced: true,
-        skip_trace_date: new Date().toISOString(),
-        data_source: 'manual',
-        notes: contact.notes || null
-      }
-      
-      const { data: insertedContact } = await supabase
-        .from('contacts')
-        .insert([contactData])
-        .select()
-        .single()
-      
-      if (insertedContact) {
-        const phones = contact.phones
-          .filter(p => p.number.trim())
-          .map((p, i) => ({
-            contact_id: insertedContact.id,
-            phone_number: p.number,
-            phone_type: p.type,
-            is_primary: i === 0,
-            data_source: 'manual'
-          }))
-        
-        if (phones.length > 0) {
-          await supabase.from('phone_numbers').insert(phones)
-        }
-        
-        const emails = contact.emails
-          .filter(e => e.email.trim())
-          .map((e, i) => ({
-            contact_id: insertedContact.id,
-            email_address: e.email,
-            email_type: e.type,
-            is_primary: i === 0,
-            data_source: 'manual'
-          }))
-        
-        if (emails.length > 0) {
-          await supabase.from('emails').insert(emails)
-        }
-        
-        if (contact.address) {
-          await supabase.from('addresses').insert([{
-            contact_id: insertedContact.id,
-            street_address: contact.address,
-            city: contact.city,
-            state: contact.state,
-            zip_code: contact.zip,
-            address_type: 'current',
-            is_current: true,
-            data_source: 'manual'
-          }])
-        }
-        
-        for (const relative of relatives) {
-          if (!relative.name.trim()) continue
-          
-          const relData = {
-            lead_id: selectedLead.id,
-            full_name: relative.name,
-            first_name: relative.name.split(' ')[0],
-            last_name: relative.name.split(' ').slice(-1)[0],
-            contact_type: 'relative',
-            relationship: relative.relationship,
-            skip_traced: false,
-            data_source: 'manual'
-          }
-          
-          const { data: relContact } = await supabase
-            .from('contacts')
-            .insert([relData])
-            .select()
-            .single()
-          
-          if (relContact) {
-            await supabase.from('relatives').insert([{
-              contact_id: insertedContact.id,
-              relative_contact_id: relContact.id,
-              relationship_type: relative.relationship || 'relative',
-              data_source: 'manual'
-            }])
-            
-            const relPhones = relative.phones
-              .filter(p => p.number.trim())
-              .map(p => ({
-                contact_id: relContact.id,
-                phone_number: p.number,
-                phone_type: p.type,
-                data_source: 'manual'
-              }))
-            
-            if (relPhones.length > 0) {
-              await supabase.from('phone_numbers').insert(relPhones)
-            }
-          }
-        }
-        
-        await supabase
-          .from('leads')
-          .update({
-            skip_trace_status: 'completed',
-            skip_trace_date: new Date().toISOString(),
-            primary_contact_id: insertedContact.id
-          })
-          .eq('id', selectedLead.id)
-        
-        const updatedContacts = await loadContacts(selectedLead.id)
-        setLeadContacts(updatedContacts)
-        setShowSkipTrace(false)
-        
-        alert('Contact saved successfully!')
-      }
-    } catch (err) {
-      console.error(err)
-      alert('Failed to save contact: ' + err.message)
-    }
+  
   }
 
   const login = async (e) => {
@@ -329,6 +203,7 @@ export default function App() {
     
     if (data) {
       setUser(data)
+      loadData()
       setView('dashboard')
     } else {
       alert('Invalid credentials')
@@ -438,10 +313,12 @@ export default function App() {
   }
 
   const viewLead = async (lead) => {
+    console.log('👁️ Viewing lead:', lead.id)
     const [notes, contacts] = await Promise.all([
       loadNotes(lead.id),
       loadContacts(lead.id)
     ])
+    console.log('👁️ Setting leadContacts to:', contacts)
     setSelectedLead({ ...lead, notes })
     setLeadContacts(contacts)
     setView('detail')
@@ -712,7 +589,8 @@ export default function App() {
                 </select>
               </div>
             )}
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+            
+           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <User className="w-5 h-5 text-amber-400" />
                 Contact Information
@@ -787,7 +665,6 @@ export default function App() {
             </div>
           </div>
         </div>
-      </div>
     </div>
   )
 
