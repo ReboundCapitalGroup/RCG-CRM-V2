@@ -662,10 +662,32 @@ export default function App() {
               </div>
               <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add note..." className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white resize-none focus:outline-none focus:border-amber-500" rows={3} />
               <button onClick={addNote} className="mt-2 w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700">Add Note</button>
-            </div>
+  </div>
           </div>
         </div>
+      </div>
     </div>
+  )
+```
+
+**Count the closing divs - you need FIVE `</div>` tags, not FOUR!**
+
+Before:
+```
+            </div>     ← closes Notes card
+          </div>       ← closes right sidebar
+        </div>         ← closes grid
+    </div>             ← closes outer wrapper (MISSING ONE HERE!)
+  )
+```
+
+After:
+```
+            </div>     ← closes Notes card
+          </div>       ← closes right sidebar  
+        </div>         ← closes grid
+      </div>           ← closes max-w-7xl wrapper (THIS ONE WAS MISSING!)
+    </div>             ← closes min-h-screen
   )
 
   return (
