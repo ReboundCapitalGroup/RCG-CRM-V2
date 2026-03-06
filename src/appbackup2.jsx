@@ -28,91 +28,83 @@ export default function App() {
   }, [user])
 
   useEffect(() => {
-    if (!user || user?.role === 'admin') return
-
-    const style = document.createElement('style')
-    style.innerHTML = `
-      * {
-        -webkit-user-select: none !important;
-        -moz-user-select: none !important;
-        -ms-user-select: none !important;
-        user-select: none !important;
+    if (user?.role !== 'admin') {
+      const style = document.createElement('style')
+      style.innerHTML = `
+        * {
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          -ms-user-select: none !important;
+          user-select: none !important;
+        }
+        input, textarea {
+          -webkit-user-select: text !important;
+          -moz-user-select: text !important;
+          -ms-user-select: text !important;
+          user-select: text !important;
+        }
+      `
+      document.head.appendChild(style)
+      
+      document.addEventListener('contextmenu', (e) => e.preventDefault())
+      document.addEventListener('copy', (e) => e.preventDefault())
+      document.addEventListener('cut', (e) => e.preventDefault())
+      
+      let screenshotAttempts = 0
+      
+      const handleScreenshot = async () => {
+        screenshotAttempts++
+        
+        navigator.clipboard.writeText('')
+        
+        if (screenshotAttempts === 1) {
+          alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
+        } else if (screenshotAttempts === 2) {
+          alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
+        } else if (screenshotAttempts >= 3) {
+          alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
+          
+          await supabase.from('notes').insert([{
+            lead_id: selectedLead?.id || null,
+            text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
+            author: 'SYSTEM',
+            created_at: new Date().toISOString()
+          }])
+        }
       }
-      input, textarea {
-        -webkit-user-select: text !important;
-        -moz-user-select: text !important;
-        -ms-user-select: text !important;
-        user-select: text !important;
+      
+      document.addEventListener('keyup', (e) => {
+        if (e.key === 'PrintScreen') {
+          handleScreenshot()
+        }
+      })
+      
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
+          e.preventDefault()
+          return false
+        }
+        if (e.ctrlKey && e.key === 'u') {
+          e.preventDefault()
+          return false
+        }
+        if (e.key === 'F12') {
+          e.preventDefault()
+          return false
+        }
+      })
+      
+      setInterval(() => {
+        navigator.clipboard.writeText('')
+      }, 1000)
+      
+      const originalLog = console.log
+      console.log = () => {}
+      
+      return () => {
+        document.head.removeChild(style)
+        console.log = originalLog
       }
-    `
-    document.head.appendChild(style)
-
-    const blockContext = (e) => e.preventDefault()
-    const blockCopy = (e) => e.preventDefault()
-    const blockCut = (e) => e.preventDefault()
-
-    document.addEventListener('contextmenu', blockContext)
-    document.addEventListener('copy', blockCopy)
-    document.addEventListener('cut', blockCut)
-
-    let screenshotAttempts = 0
-
-    const handleScreenshot = async () => {
-      screenshotAttempts++
-      navigator.clipboard.writeText('')
-      if (screenshotAttempts === 1) {
-        alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
-      } else if (screenshotAttempts === 2) {
-        alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
-      } else if (screenshotAttempts >= 3) {
-        alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
-        await supabase.from('notes').insert([{
-          lead_id: selectedLead?.id || null,
-          text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
-          author: 'SYSTEM',
-          created_at: new Date().toISOString()
-        }])
-      }
-    }
-
-    const handleKeyUp = (e) => {
-      if (e.key === 'PrintScreen') handleScreenshot()
-    }
-
-    const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
-        e.preventDefault()
-        return false
-      }
-      if (e.ctrlKey && e.key === 'u') {
-        e.preventDefault()
-        return false
-      }
-      if (e.key === 'F12') {
-        e.preventDefault()
-        return false
-      }
-    }
-
-    document.addEventListener('keyup', handleKeyUp)
-    document.addEventListener('keydown', handleKeyDown)
-
-    const clipboardInterval = setInterval(() => {
-      navigator.clipboard.writeText('')
-    }, 1000)
-
-    const originalLog = console.log
-    console.log = () => {}
-
-    return () => {
-      document.head.removeChild(style)
-      document.removeEventListener('contextmenu', blockContext)
-      document.removeEventListener('copy', blockCopy)
-      document.removeEventListener('cut', blockCut)
-      document.removeEventListener('keyup', handleKeyUp)
-      document.removeEventListener('keydown', handleKeyDown)
-      clearInterval(clipboardInterval)
-      console.log = originalLog
     }
   }, [user, selectedLead])
 
@@ -124,21 +116,7 @@ export default function App() {
         supabase.from('users').select('*')
       ])
       
-      if (leadsRes.data) {
-        // Auto-mark negative surplus leads as Dead
-        const processed = leadsRes.data.map(l => {
-          if (l.surplus && l.status === 'New') {
-            const raw = parseFloat(String(l.surplus).replace(/[$,]/g, ''))
-            if (!isNaN(raw) && raw < 0) {
-              // Update in database too
-              supabase.from('leads').update({ status: 'Dead' }).eq('id', l.id)
-              return { ...l, status: 'Dead' }
-            }
-          }
-          return l
-        })
-        setLeads(processed)
-      }
+      if (leadsRes.data) setLeads(leadsRes.data)
       if (usersRes.data) setUsers(usersRes.data)
     } catch (err) {
       console.error('Error loading data:', err)
@@ -506,15 +484,7 @@ export default function App() {
   const filtered = leads.filter(l => {
     if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
     if (filters.status !== 'all' && l.status !== filters.status) return false
-    if (filters.type !== 'all') {
-      if (filters.type === 'Foreclosure') {
-        if (l.lead_type !== 'Foreclosure' && !l.county?.includes('FC') && l.platform !== 'realforeclose') return false
-      } else if (filters.type === 'Tax Deed') {
-        if (l.lead_type !== 'Tax Deed' && !l.county?.includes('TD') && l.platform !== 'realtaxdeed') return false
-      } else {
-        if (l.lead_type !== filters.type) return false
-      }
-    }
+    if (filters.type !== 'all' && l.lead_type !== filters.type) return false
     if (filters.county !== 'all' && l.county !== filters.county) return false
     if (filters.state !== 'all') {
       const county = l.county || ''
@@ -558,13 +528,13 @@ export default function App() {
     interested: leads.filter(l => l.status === 'Interested').length,
     surplus: leads.filter(l => l.lead_type === 'Surplus').length,
     future: leads.filter(l => l.lead_type === 'Future Auction').length,
-    totalSurplus: Math.round(leads.reduce((sum, l) => {
+    totalSurplus: leads.reduce((sum, l) => {
       if (l.surplus && l.status !== 'Dead') {
-        const amount = parseFloat(String(l.surplus).replace(/[$,]/g, '')) || 0
+        const amount = parseFloat(l.surplus.replace(/[$,]/g, '')) || 0
         return sum + (amount > 0 ? amount : 0)
       }
       return sum
-    }, 0) * 100) / 100
+    }, 0)
   }
 
   // Get unique counties and states
@@ -1065,7 +1035,6 @@ export default function App() {
               <option>Contacted</option>
               <option>Interested</option>
               <option>Not Interested</option>
-              <option>Sold</option>
               <option>Dead</option>
             </select>
             <select 
@@ -1074,10 +1043,8 @@ export default function App() {
               className="px-4 py-3 bg-slate-900/50 border border-slate-600 text-white rounded-lg"
             >
               <option value="all">All Types</option>
-              <option value="Surplus">Surplus</option>
-              <option value="Future Auction">Future Auction</option>
-              <option value="Foreclosure">Foreclosure</option>
-              <option value="Tax Deed">Tax Deed</option>
+              <option>Surplus</option>
+              <option>Future Auction</option>
             </select>
             <select 
               value={filters.state} 
@@ -1197,39 +1164,15 @@ export default function App() {
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>
-                    {(() => {
-                      if (!l.auction_date) return '—'
-                      const d = l.auction_date
-                      // Handle MM/DD/YYYY format from scraper
-                      if (d.includes('/')) {
-                        const parts = d.split('/')
-                        if (parts.length === 3) return `${parts[0]}/${parts[1]}/${parts[2].slice(-2)}`
-                      }
-                      // Handle ISO format
-                      const date = new Date(d + (d.includes('T') ? '' : 'T00:00:00'))
-                      if (isNaN(date.getTime())) return d
-                      return date.toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'})
-                    })()}
+                    {l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}
                   </td>
-                  <td className="px-2 py-2 font-semibold text-xs truncate" style={{width: '90px'}}>
-                    {(() => {
-                      if (!l.surplus) return '—'
-                      const raw = parseFloat(String(l.surplus).replace(/[$,]/g, ''))
-                      if (isNaN(raw)) return l.surplus
-                      const rounded = Math.round(raw * 100) / 100
-                      const formatted = '$' + Math.abs(rounded).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})
-                      if (rounded < 0) return <span className="text-red-400">-{formatted}</span>
-                      return <span className="text-emerald-400">{formatted}</span>
-                    })()}
-                  </td>
+                  <td className="px-2 py-2 text-emerald-400 font-semibold text-xs truncate" style={{width: '90px'}}>{l.surplus || '—'}</td>
                   <td className="px-2 py-2" style={{width: '75px'}}>
                     <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${
                       l.status === 'New' ? 'bg-blue-500/20 text-blue-400' :
                       l.status === 'Contacted' ? 'bg-amber-500/20 text-amber-400' :
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
                       l.status === 'Not Interested' ? 'bg-slate-500/20 text-slate-400' :
-                      l.status === 'Sold' ? 'bg-yellow-500/20 text-yellow-400' :
-                      l.status === 'Dead' ? 'bg-red-500/20 text-red-400' :
                       'bg-red-500/20 text-red-400'
                     }`}>
                       {l.status === 'Not Interested' ? 'NoInt' : l.status}
