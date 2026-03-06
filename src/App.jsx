@@ -28,83 +28,91 @@ export default function App() {
   }, [user])
 
   useEffect(() => {
-    if (user?.role !== 'admin') {
-      const style = document.createElement('style')
-      style.innerHTML = `
-        * {
-          -webkit-user-select: none !important;
-          -moz-user-select: none !important;
-          -ms-user-select: none !important;
-          user-select: none !important;
-        }
-        input, textarea {
-          -webkit-user-select: text !important;
-          -moz-user-select: text !important;
-          -ms-user-select: text !important;
-          user-select: text !important;
-        }
-      `
-      document.head.appendChild(style)
-      
-      document.addEventListener('contextmenu', (e) => e.preventDefault())
-      document.addEventListener('copy', (e) => e.preventDefault())
-      document.addEventListener('cut', (e) => e.preventDefault())
-      
-      let screenshotAttempts = 0
-      
-      const handleScreenshot = async () => {
-        screenshotAttempts++
-        
-        navigator.clipboard.writeText('')
-        
-        if (screenshotAttempts === 1) {
-          alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
-        } else if (screenshotAttempts === 2) {
-          alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
-        } else if (screenshotAttempts >= 3) {
-          alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
-          
-          await supabase.from('notes').insert([{
-            lead_id: selectedLead?.id || null,
-            text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
-            author: 'SYSTEM',
-            created_at: new Date().toISOString()
-          }])
-        }
+    if (!user || user?.role === 'admin') return
+
+    const style = document.createElement('style')
+    style.innerHTML = `
+      * {
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+        user-select: none !important;
       }
-      
-      document.addEventListener('keyup', (e) => {
-        if (e.key === 'PrintScreen') {
-          handleScreenshot()
-        }
-      })
-      
-      document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
-          e.preventDefault()
-          return false
-        }
-        if (e.ctrlKey && e.key === 'u') {
-          e.preventDefault()
-          return false
-        }
-        if (e.key === 'F12') {
-          e.preventDefault()
-          return false
-        }
-      })
-      
-      setInterval(() => {
-        navigator.clipboard.writeText('')
-      }, 1000)
-      
-      const originalLog = console.log
-      console.log = () => {}
-      
-      return () => {
-        document.head.removeChild(style)
-        console.log = originalLog
+      input, textarea {
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
       }
+    `
+    document.head.appendChild(style)
+
+    const blockContext = (e) => e.preventDefault()
+    const blockCopy = (e) => e.preventDefault()
+    const blockCut = (e) => e.preventDefault()
+
+    document.addEventListener('contextmenu', blockContext)
+    document.addEventListener('copy', blockCopy)
+    document.addEventListener('cut', blockCut)
+
+    let screenshotAttempts = 0
+
+    const handleScreenshot = async () => {
+      screenshotAttempts++
+      navigator.clipboard.writeText('')
+      if (screenshotAttempts === 1) {
+        alert('⚠️ SECURITY ALERT ⚠️\n\nScreenshot detected!\n\nAdmin has been notified of this activity.\n\nYour account: ' + user.name + '\nTimestamp: ' + new Date().toLocaleString() + '\n\nUnauthorized screenshots of company data are strictly prohibited.\n\nContinued violations will result in immediate account suspension and legal action.')
+      } else if (screenshotAttempts === 2) {
+        alert('🚨 FINAL WARNING 🚨\n\nSecond screenshot attempt detected!\n\nAdmin notification sent with your user details.\n\nOne more attempt will trigger automatic account lockout.\n\nYou are being monitored.')
+      } else if (screenshotAttempts >= 3) {
+        alert('🔴 ACCOUNT FLAGGED 🔴\n\nMultiple screenshot violations detected.\n\nYour account has been flagged for review.\n\nAdmin will contact you shortly.\n\nAll your activity is being logged.')
+        await supabase.from('notes').insert([{
+          lead_id: selectedLead?.id || null,
+          text: `🚨 SECURITY ALERT: User ${user.name} (${user.username}) attempted ${screenshotAttempts} screenshots at ${new Date().toLocaleString()}`,
+          author: 'SYSTEM',
+          created_at: new Date().toISOString()
+        }])
+      }
+    }
+
+    const handleKeyUp = (e) => {
+      if (e.key === 'PrintScreen') handleScreenshot()
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {
+        e.preventDefault()
+        return false
+      }
+      if (e.ctrlKey && e.key === 'u') {
+        e.preventDefault()
+        return false
+      }
+      if (e.key === 'F12') {
+        e.preventDefault()
+        return false
+      }
+    }
+
+    document.addEventListener('keyup', handleKeyUp)
+    document.addEventListener('keydown', handleKeyDown)
+
+    const clipboardInterval = setInterval(() => {
+      navigator.clipboard.writeText('')
+    }, 1000)
+
+    const originalLog = console.log
+    console.log = () => {}
+
+    return () => {
+      document.head.removeChild(style)
+      document.removeEventListener('contextmenu', blockContext)
+      document.removeEventListener('copy', blockCopy)
+      document.removeEventListener('cut', blockCut)
+      document.removeEventListener('keyup', handleKeyUp)
+      document.removeEventListener('keydown', handleKeyDown)
+      clearInterval(clipboardInterval)
+      console.log = originalLog
     }
   }, [user, selectedLead])
 
@@ -528,7 +536,6 @@ export default function App() {
     interested: leads.filter(l => l.status === 'Interested').length,
     surplus: leads.filter(l => l.lead_type === 'Surplus').length,
     future: leads.filter(l => l.lead_type === 'Future Auction').length,
-    taxDeed: leads.filter(l => l.lead_type === 'Tax Deed').length,
     totalSurplus: leads.reduce((sum, l) => {
       if (l.surplus && l.status !== 'Dead') {
         const amount = parseFloat(l.surplus.replace(/[$,]/g, '')) || 0
@@ -656,7 +663,7 @@ export default function App() {
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 ${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : selectedLead.lead_type === 'Tax Deed' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 ${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
                     {selectedLead.lead_type}
                   </span>
                   <h1 className="text-3xl font-bold text-white mb-2">{selectedLead.property_address}</h1>
@@ -1046,7 +1053,6 @@ export default function App() {
               <option value="all">All Types</option>
               <option>Surplus</option>
               <option>Future Auction</option>
-              <option>Tax Deed</option>
             </select>
             <select 
               value={filters.state} 
@@ -1161,8 +1167,8 @@ export default function App() {
                   <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
                   <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
                   <td className="px-2 py-2" style={{width: '60px'}}>
-                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : l.lead_type === 'Tax Deed' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      {l.lead_type === 'Surplus' ? 'Surp' : l.lead_type === 'Tax Deed' ? 'Tax' : 'Futr'}
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                      {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>
