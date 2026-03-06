@@ -124,7 +124,21 @@ export default function App() {
         supabase.from('users').select('*')
       ])
       
-      if (leadsRes.data) setLeads(leadsRes.data)
+      if (leadsRes.data) {
+        // Auto-mark negative surplus leads as Dead
+        const processed = leadsRes.data.map(l => {
+          if (l.surplus && l.status === 'New') {
+            const raw = parseFloat(String(l.surplus).replace(/[$,]/g, ''))
+            if (!isNaN(raw) && raw < 0) {
+              // Update in database too
+              supabase.from('leads').update({ status: 'Dead' }).eq('id', l.id)
+              return { ...l, status: 'Dead' }
+            }
+          }
+          return l
+        })
+        setLeads(processed)
+      }
       if (usersRes.data) setUsers(usersRes.data)
     } catch (err) {
       console.error('Error loading data:', err)
@@ -488,29 +502,18 @@ export default function App() {
     }
   }
 
-  // Filter leads based on user role and filters
   // Helper to detect if a lead is from tax deed or foreclosure site
   const getLeadSource = (l) => {
-    const url = l.case_url || l.detail_url || l.property_appraiser_url || ''
+    const url = (l.case_url || l.detail_url || '').toLowerCase()
     const caseNum = (l.case_number || '').toUpperCase()
-    
-    // Check URL for realtaxdeed
     if (url.includes('realtaxdeed')) return 'taxdeed'
     if (url.includes('realforeclose')) return 'foreclosure'
-    
-    // Check case number patterns - TD typically means tax deed
     if (caseNum.includes('TD')) return 'taxdeed'
-    if (caseNum.match(/^\d{4}TD/)) return 'taxdeed'
-    
-    // Check if case type field exists
-    const caseType = (l.case_type || '').toUpperCase()
-    if (caseType.includes('TAX') || caseType.includes('TD')) return 'taxdeed'
-    if (caseType.includes('FORECLOSURE') || caseType.includes('FC')) return 'foreclosure'
-    
-    // Default to foreclosure
+    if (/^\d{4}TD/.test(caseNum)) return 'taxdeed'
     return 'foreclosure'
   }
 
+  // Filter leads based on user role and filters
   const filtered = leads.filter(l => {
     if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
     if (filters.status !== 'all' && l.status !== filters.status) return false
@@ -566,13 +569,13 @@ export default function App() {
     interested: leads.filter(l => l.status === 'Interested').length,
     surplus: leads.filter(l => l.lead_type === 'Surplus').length,
     future: leads.filter(l => l.lead_type === 'Future Auction').length,
-    totalSurplus: leads.reduce((sum, l) => {
+    totalSurplus: Math.round(leads.reduce((sum, l) => {
       if (l.surplus && l.status !== 'Dead') {
-        const amount = parseFloat(l.surplus.replace(/[$,]/g, '')) || 0
+        const amount = parseFloat(String(l.surplus).replace(/[$,]/g, '')) || 0
         return sum + (amount > 0 ? amount : 0)
       }
       return sum
-    }, 0)
+    }, 0) * 100) / 100
   }
 
   // Get unique counties and states
@@ -1073,6 +1076,7 @@ export default function App() {
               <option>Contacted</option>
               <option>Interested</option>
               <option>Not Interested</option>
+              <option>Sold</option>
               <option>Dead</option>
             </select>
             <select 
@@ -1204,15 +1208,39 @@ export default function App() {
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>
-                    {l.auction_date ? new Date(l.auction_date).toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'}) : '—'}
+                    {(() => {
+                      if (!l.auction_date) return '—'
+                      const d = l.auction_date
+                      // Handle MM/DD/YYYY format from scraper
+                      if (d.includes('/')) {
+                        const parts = d.split('/')
+                        if (parts.length === 3) return `${parts[0]}/${parts[1]}/${parts[2].slice(-2)}`
+                      }
+                      // Handle ISO format
+                      const date = new Date(d + (d.includes('T') ? '' : 'T00:00:00'))
+                      if (isNaN(date.getTime())) return d
+                      return date.toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: '2-digit'})
+                    })()}
                   </td>
-                  <td className="px-2 py-2 text-emerald-400 font-semibold text-xs truncate" style={{width: '90px'}}>{l.surplus || '—'}</td>
+                  <td className="px-2 py-2 font-semibold text-xs truncate" style={{width: '90px'}}>
+                    {(() => {
+                      if (!l.surplus) return '—'
+                      const raw = parseFloat(String(l.surplus).replace(/[$,]/g, ''))
+                      if (isNaN(raw)) return l.surplus
+                      const rounded = Math.round(raw * 100) / 100
+                      const formatted = '$' + Math.abs(rounded).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                      if (rounded < 0) return <span className="text-red-400">-{formatted}</span>
+                      return <span className="text-emerald-400">{formatted}</span>
+                    })()}
+                  </td>
                   <td className="px-2 py-2" style={{width: '75px'}}>
                     <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${
                       l.status === 'New' ? 'bg-blue-500/20 text-blue-400' :
                       l.status === 'Contacted' ? 'bg-amber-500/20 text-amber-400' :
                       l.status === 'Interested' ? 'bg-emerald-500/20 text-emerald-400' :
                       l.status === 'Not Interested' ? 'bg-slate-500/20 text-slate-400' :
+                      l.status === 'Sold' ? 'bg-yellow-500/20 text-yellow-400' :
+                      l.status === 'Dead' ? 'bg-red-500/20 text-red-400' :
                       'bg-red-500/20 text-red-400'
                     }`}>
                       {l.status === 'Not Interested' ? 'NoInt' : l.status}
