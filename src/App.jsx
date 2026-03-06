@@ -528,6 +528,7 @@ export default function App() {
     interested: leads.filter(l => l.status === 'Interested').length,
     surplus: leads.filter(l => l.lead_type === 'Surplus').length,
     future: leads.filter(l => l.lead_type === 'Future Auction').length,
+    taxDeed: leads.filter(l => l.lead_type === 'Tax Deed').length,
     totalSurplus: leads.reduce((sum, l) => {
       if (l.surplus && l.status !== 'Dead') {
         const amount = parseFloat(l.surplus.replace(/[$,]/g, '')) || 0
@@ -655,7 +656,7 @@ export default function App() {
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 ${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-3 ${selectedLead.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : selectedLead.lead_type === 'Tax Deed' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
                     {selectedLead.lead_type}
                   </span>
                   <h1 className="text-3xl font-bold text-white mb-2">{selectedLead.property_address}</h1>
@@ -1045,6 +1046,7 @@ export default function App() {
               <option value="all">All Types</option>
               <option>Surplus</option>
               <option>Future Auction</option>
+              <option>Tax Deed</option>
             </select>
             <select 
               value={filters.state} 
@@ -1159,8 +1161,8 @@ export default function App() {
                   <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
                   <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
                   <td className="px-2 py-2" style={{width: '60px'}}>
-                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : l.lead_type === 'Tax Deed' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                      {l.lead_type === 'Surplus' ? 'Surp' : l.lead_type === 'Tax Deed' ? 'Tax' : 'Futr'}
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>
