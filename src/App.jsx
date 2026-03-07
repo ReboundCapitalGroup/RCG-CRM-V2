@@ -119,27 +119,37 @@ export default function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [leadsRes, usersRes] = await Promise.all([
-        supabase.from('leads').select('*').order('created_at', { ascending: false }),
-        supabase.from('users').select('*')
-      ])
-      
-      if (leadsRes.data) {
-        // Auto-mark negative surplus leads as Dead
-        const processed = leadsRes.data.map(l => {
-          if (l.surplus && l.status === 'New') {
-            const raw = parseFloat(String(l.surplus).replace(/[$,]/g, ''))
-            if (!isNaN(raw) && raw < 0) {
-              // Update in database too
-              supabase.from('leads').update({ status: 'Dead' }).eq('id', l.id)
-              return { ...l, status: 'Dead' }
-            }
-          }
-          return l
-        })
-        setLeads(processed)
+      // Fetch ALL leads in batches to bypass Supabase 1000-row limit
+      let allLeads = []
+      let from = 0
+      const batchSize = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + batchSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        allLeads = [...allLeads, ...data]
+        if (data.length < batchSize) break
+        from += batchSize
       }
-      if (usersRes.data) setUsers(usersRes.data)
+
+      const processed = allLeads.map(l => {
+        if (l.surplus && l.status === 'New') {
+          const raw = parseFloat(String(l.surplus).replace(/[$,]/g, ''))
+          if (!isNaN(raw) && raw < 0) {
+            supabase.from('leads').update({ status: 'Dead' }).eq('id', l.id)
+            return { ...l, status: 'Dead' }
+          }
+        }
+        return l
+      })
+      setLeads(processed)
+
+      const { data: usersData } = await supabase.from('users').select('*')
+      if (usersData) setUsers(usersData)
     } catch (err) {
       console.error('Error loading data:', err)
     }
@@ -458,6 +468,10 @@ export default function App() {
         case_url: l.caseUrl,
         zillow_url: l.zillowUrl,
         property_appraiser_url: l.propertyAppraiserUrl,
+        final_judgment_url: l.finalJudgmentUrl,
+        clerk_of_courts_url: l.clerkOfCourtsUrl,
+        street_map_url: l.streetMapUrl,
+        satellite_url: l.satelliteUrl,
         status: l.status || 'New'
       }))
       
@@ -502,29 +516,16 @@ export default function App() {
     }
   }
 
-  // Helper to detect if a lead is from tax deed or foreclosure site
-  const getLeadSource = (l) => {
-    const url = (l.case_url || l.detail_url || '').toLowerCase()
-    const caseNum = (l.case_number || '').toUpperCase()
-    if (url.includes('realtaxdeed')) return 'taxdeed'
-    if (url.includes('realforeclose')) return 'foreclosure'
-    if (caseNum.includes('TD')) return 'taxdeed'
-    if (/^\d{4}TD/.test(caseNum)) return 'taxdeed'
-    return 'foreclosure'
-  }
-
   // Filter leads based on user role and filters
   const filtered = leads.filter(l => {
     if (user?.role !== 'admin' && l.assigned_to !== user?.id) return false
     if (filters.status !== 'all' && l.status !== filters.status) return false
     if (filters.type !== 'all') {
-      if (filters.type === 'Foreclosure') {
-        if (getLeadSource(l) !== 'foreclosure') return false
-      } else if (filters.type === 'Tax Deed') {
-        if (getLeadSource(l) !== 'taxdeed') return false
-      } else {
-        if (l.lead_type !== filters.type) return false
-      }
+      const lt = (l.lead_type || '').toUpperCase().replace('_', ' ').trim()
+      if (filters.type === 'Surplus' && lt !== 'SURPLUS') return false
+      if (filters.type === 'Future Auction' && lt !== 'FUTURE AUCTION') return false
+      if (filters.type === 'Foreclosure' && lt !== 'FORECLOSURE') return false
+      if (filters.type === 'Tax Deed' && !['TAXDEED', 'TAX DEED'].includes(lt)) return false
     }
     if (filters.county !== 'all' && l.county !== filters.county) return false
     if (filters.state !== 'all') {
@@ -780,7 +781,7 @@ export default function App() {
                   <p className="text-white font-semibold text-lg">{selectedLead.assessed_value || 'N/A'}</p>
                 </div>
                 <div className="p-3 bg-slate-900/50 rounded-lg">
-                  <p className="text-slate-400 text-sm mb-1">Judgment Amount</p>
+                  <p className="text-slate-400 text-sm mb-1">{['TAXDEED','TAX DEED'].includes((selectedLead.lead_type||'').toUpperCase()) ? 'Opening Bid' : 'Judgment Amount'}</p>
                   <p className="text-white font-semibold text-lg">{selectedLead.judgment_amount || 'N/A'}</p>
                 </div>
                 <div className="p-3 bg-slate-900/50 rounded-lg">
@@ -794,21 +795,45 @@ export default function App() {
               </div>
               <div className="flex flex-wrap gap-3">
                 {selectedLead.case_url && (
-                  <a href={selectedLead.case_url} target="_blank" rel="noopener noreferrer" 
+                  <a href={selectedLead.case_url} target="_blank" rel="noopener noreferrer"
                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
                     View Case →
                   </a>
                 )}
-                {selectedLead.zillow_url && (
-                  <a href={selectedLead.zillow_url} target="_blank" rel="noopener noreferrer" 
+                {selectedLead.final_judgment_url && (
+                  <a href={selectedLead.final_judgment_url} target="_blank" rel="noopener noreferrer"
                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
-                    View on Zillow →
+                    Final Judgment →
+                  </a>
+                )}
+                {selectedLead.clerk_of_courts_url && (
+                  <a href={selectedLead.clerk_of_courts_url} target="_blank" rel="noopener noreferrer"
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    Clerk of Courts →
                   </a>
                 )}
                 {selectedLead.property_appraiser_url && (
-                  <a href={selectedLead.property_appraiser_url} target="_blank" rel="noopener noreferrer" 
+                  <a href={selectedLead.property_appraiser_url} target="_blank" rel="noopener noreferrer"
                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
                     Property Appraiser →
+                  </a>
+                )}
+                {selectedLead.street_map_url && (
+                  <a href={selectedLead.street_map_url} target="_blank" rel="noopener noreferrer"
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    Street Map →
+                  </a>
+                )}
+                {selectedLead.satellite_url && (
+                  <a href={selectedLead.satellite_url} target="_blank" rel="noopener noreferrer"
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    Satellite View →
+                  </a>
+                )}
+                {selectedLead.zillow_url && (
+                  <a href={selectedLead.zillow_url} target="_blank" rel="noopener noreferrer"
+                     className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium">
+                    Zillow →
                   </a>
                 )}
               </div>
@@ -1052,6 +1077,7 @@ export default function App() {
           >
             Surplus {sortBy === 'surplus' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
+          <span className="text-slate-500 text-sm ml-auto">Showing {sortedFiltered.length.toLocaleString()} of {leads.length.toLocaleString()} leads</span>
         </div>
 
         {/* Filters */}
@@ -1203,8 +1229,18 @@ export default function App() {
                   <td className="px-2 py-2 text-slate-300 text-xs truncate" style={{width: '90px'}}>{l.county?.split('-')[1] || l.county}</td>
                   <td className="px-2 py-2 text-white text-xs truncate">{l.property_address}</td>
                   <td className="px-2 py-2" style={{width: '60px'}}>
-                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${l.lead_type === 'Surplus' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      {l.lead_type === 'Surplus' ? 'Surp' : 'Futr'}
+                    <span className={`px-1 py-0.5 rounded text-xs font-semibold block text-center ${
+                      (l.lead_type||'').toUpperCase() === 'SURPLUS' ? 'bg-emerald-500/20 text-emerald-400' :
+                      (l.lead_type||'').toUpperCase() === 'FUTURE AUCTION' ? 'bg-blue-500/20 text-blue-400' :
+                      (l.lead_type||'').toUpperCase() === 'FORECLOSURE' ? 'bg-orange-500/20 text-orange-400' :
+                      ['TAXDEED','TAX DEED'].includes((l.lead_type||'').toUpperCase()) ? 'bg-purple-500/20 text-purple-400' :
+                      'bg-slate-500/20 text-slate-400'
+                    }`}>
+                      {(l.lead_type||'').toUpperCase() === 'SURPLUS' ? 'Surp' :
+                       (l.lead_type||'').toUpperCase() === 'FUTURE AUCTION' ? 'Futr' :
+                       (l.lead_type||'').toUpperCase() === 'FORECLOSURE' ? 'FC' :
+                       ['TAXDEED','TAX DEED'].includes((l.lead_type||'').toUpperCase()) ? 'TD' :
+                       l.lead_type || '?'}
                     </span>
                   </td>
                   <td className="px-2 py-2 text-slate-300 text-xs" style={{width: '75px'}}>
